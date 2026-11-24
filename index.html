@@ -1447,6 +1447,22 @@
               <span>+ Produk Belum Ada (Input Baru)</span>
             </label>
           </div>
+          <div id="boxNotaPilihProduk" class="space-y-1.5 relative">
+            <label class="block text-[11px] font-bold text-slate-600">Cari & Pilih Barang yang Sudah Terdaftar</label>
+            <div class="flex gap-1.5">
+              <input type="text" id="cariProdukNota" oninput="filterDropdownProdukNota()" onfocus="filterDropdownProdukNota(true)" onkeydown="cekEnterBarcodeNota(event)"
+                autocomplete="off" placeholder="Ketik nama produk atau scan kode/barcode/QR..."
+                class="flex-1 min-w-0 px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white outline-none focus:border-brand-600" />
+              <button type="button" onclick="bukaScannerKamera('nota_cari')" title="Scan QR / Barcode Barang"
+                class="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold shrink-0 flex items-center gap-1 shadow-sm">
+                📷 <span>Scan QR</span>
+              </button>
+            </div>
+            <div id="listSaranProdukNota" class="hidden max-h-40 overflow-y-auto rounded-xl border border-brand-200 bg-white shadow-lg divide-y divide-slate-100"></div>
+            <select id="selectProdukNota" onchange="isiHargaDefaultNota()"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-bold bg-white outline-none focus:border-brand-600">
+            </select>
+          </div>
           <div id="boxNotaInputBaru" class="hidden space-y-2">
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <input type="text" id="notaBaruKode" placeholder="Kode Produk Baru *" class="px-3 py-2 rounded-xl border border-slate-300 text-xs font-mono font-bold uppercase bg-white" />
@@ -1487,7 +1503,7 @@
               <input type="number" step="any" inputmode="decimal" id="notaHargaBeli" placeholder="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-extrabold bg-white" />
             </div>
             <div>
-              <label class="block text-[10px] font-bold text-slate-500">H. Jual / Unit</label>
+              <label id="labelNotaHargaJualUnit" class="block text-[10px] font-bold text-slate-500">H. Jual / pcs</label>
               <input type="number" step="any" inputmode="decimal" id="notaHargaJual" placeholder="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 font-mono text-xs font-extrabold bg-white" />
             </div>
           </div>
@@ -2361,9 +2377,7 @@
 
       const lblRiwayatKasir = document.getElementById('labelFilterRiwayatKasir');
       if (lblRiwayatKasir) {
-        lblRiwayatKasir.innerText = isUserKasirAktif()
-          ? `Khusus transaksi Anda (${currentUser.nama})`
-          : 'Semua transaksi toko';
+        lblRiwayatKasir.innerText = `Khusus transaksi Anda (${currentUser.nama})`;
       }
 
       bukaTab('kasir');
@@ -2643,9 +2657,19 @@
       renderTabelStok();
     }
 
-    // =========================================================================
-    // 5. KATALOG KASIR, SCAN BARCODE & KERANJANG BELANJA
-    // =========================================================================
+    function getSatuanDasarProduk(p) {
+      if (!p) return 'pcs';
+      const langsung = String(p.satuan || p.satuanDasar || '').trim();
+      if (langsung) return langsung;
+      if (Array.isArray(p.hargaSatuanList)) {
+        const dasar = p.hargaSatuanList.find(t => Number(t?.konversi || 1) === 1 && String(t?.nama || '').trim());
+        if (dasar) return String(dasar.nama).trim();
+        const pertama = p.hargaSatuanList.find(t => String(t?.nama || '').trim());
+        if (pertama) return String(pertama.nama).trim();
+      }
+      return 'pcs';
+    }
+
     function renderKatalogKasir() {
       const tbody = document.getElementById('tabelKatalogKasir');
       if (!tbody) return;
@@ -2669,6 +2693,7 @@
       tbody.innerHTML = filtered.map(p => {
         const isJasa = String(p.jenis || '').toLowerCase().includes('jasa');
         const habis = !isJasa && Number(p.stok || 0) <= 0;
+        const satDasar = getSatuanDasarProduk(p);
         return `
           <tr class="hover:bg-slate-50 transition">
             <td class="py-2.5 px-3 font-mono font-bold text-slate-700">${p.kode}</td>
@@ -2679,7 +2704,7 @@
             <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10.5px] font-semibold">${p.jenis}</span></td>
             <td class="py-2.5 px-3 text-right font-mono font-extrabold text-slate-900">${formatRupiah(p.harga)}</td>
             <td class="py-2.5 px-3 text-center font-mono font-bold ${isJasa ? 'text-sky-600' : (habis ? 'text-rose-600' : 'text-emerald-700')}">
-              ${isJasa ? 'Jasa' : p.stok}
+              ${isJasa ? 'Jasa' : `${p.stok} ${escapeHtmlStr(satDasar)}`}
             </td>
             <td class="py-2.5 px-3 text-center">
               <button type="button" onclick="tambahProdukKeKeranjang('${p.kode}')" ${habis ? 'disabled' : ''}
@@ -2722,10 +2747,13 @@
         if (!isJasa && Number(p.stok || 0) <= 0) {
           return tampilkanToast('Stok barang habis!', '#dc2626');
         }
-        const opsiSatuan = [{ nama: 'Unit', konversi: 1, harga: Number(p.harga || 0) }];
+        const satDasar = getSatuanDasarProduk(p);
+        const opsiSatuan = [{ nama: satDasar, konversi: 1, harga: Number(p.harga || 0) }];
         if (Array.isArray(p.hargaSatuanList)) {
           p.hargaSatuanList.forEach(t => {
-            if (t && t.nama) opsiSatuan.push({ nama: t.nama, konversi: Math.max(1, Number(t.konversi || 1)), harga: Number(t.harga || 0) });
+            if (t && t.nama && String(t.nama).toLowerCase() !== satDasar.toLowerCase()) {
+              opsiSatuan.push({ nama: t.nama, konversi: Math.max(1, Number(t.konversi || 1)), harga: Number(t.harga || 0) });
+            }
           });
         }
         keranjang.push({
@@ -2733,7 +2761,7 @@
           nama: p.nama,
           harga: Number(p.harga || 0),
           qty: 1,
-          satuanNama: 'Unit',
+          satuanNama: satDasar,
           konversi: 1,
           opsiSatuan: opsiSatuan,
           stokMaks: isJasa ? 999999 : Number(p.stok || 0),
@@ -3594,15 +3622,16 @@
       const tbody = document.getElementById('tabelRiwayatKasir');
       if (!tbody) return;
 
+      const loginNama = String(currentUser?.nama || '').trim().toLowerCase();
       const list = dataLaporanSemua.filter(r => {
         const kat = String(r.kategori || '').toLowerCase();
         const isTrxJual = kat.includes('penjualan') || kat.includes('belum lunas') || kat.includes('dihapus');
         if (!isTrxJual) return false;
-        return cocokDenganUserLogin(r.user);
+        return String(r.user || '').trim().toLowerCase() === loginNama;
       }).slice(0, 25);
 
       if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">Belum ada riwayat transaksi.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-slate-400">Belum ada riwayat transaksi milik Anda.</td></tr>';
         return;
       }
 
@@ -4289,6 +4318,7 @@
 
       tbody.innerHTML = list.map(p => {
         const isJasa = String(p.jenis || '').toLowerCase().includes('jasa');
+        const satDasar = getSatuanDasarProduk(p);
         return `
           <tr class="hover:bg-slate-50">
             <td class="py-2.5 px-3 font-mono">
@@ -4299,7 +4329,7 @@
             <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded bg-slate-100 text-[10.5px] font-semibold">${escapeHtmlStr(p.jenis)}</span></td>
             <td class="py-2.5 px-3 text-right font-mono text-slate-600">${isJasa ? '-' : formatRupiah(p.hargaBeli)}</td>
             <td class="py-2.5 px-3 text-right font-mono font-extrabold text-slate-900">${formatRupiah(p.harga)}</td>
-            <td class="py-2.5 px-3 text-center font-mono font-extrabold ${isJasa ? 'text-sky-600' : 'text-emerald-700'}">${isJasa ? 'Jasa' : p.stok}</td>
+            <td class="py-2.5 px-3 text-center font-mono font-extrabold ${isJasa ? 'text-sky-600' : 'text-emerald-700'}">${isJasa ? 'Jasa' : `${p.stok} ${escapeHtmlStr(satDasar)}`}</td>
             <td class="py-2.5 px-3 text-center">
               <button type="button" onclick="bukaModalDetailProduk('${p.kode}')" class="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-extrabold">
                 Detail / Restok
@@ -4377,6 +4407,7 @@
       const p = daftarProduk.find(x => x.kode === kode);
       if (!p) return;
       produkDetailAktif = p;
+      const satDasar = getSatuanDasarProduk(p);
 
       document.getElementById('detKode').value = p.kode;
       document.getElementById('detBarcode').value = p.barcode || '';
@@ -4384,9 +4415,19 @@
       document.getElementById('detNama').value = p.nama;
       document.getElementById('detHargaBeli').value = p.hargaBeli || 0;
       document.getElementById('detHargaJual').value = p.harga || 0;
-      document.getElementById('detStokLabel').value = `${p.stok} Unit`;
+      document.getElementById('detStokLabel').value = `${p.stok} ${satDasar}`;
       document.getElementById('detQtyTambah').value = 0;
       document.getElementById('detKonversiTambah').value = 1;
+
+      const selSatDet = document.getElementById('detSatuanTambahSelect');
+      if (selSatDet) {
+        const optExist = Array.from(selSatDet.options).find(o => o.value.toLowerCase() === satDasar.toLowerCase());
+        if (optExist) {
+          selSatDet.value = optExist.value;
+          document.getElementById('detKonversiTambah').value = optExist.getAttribute('data-konv') || '1';
+        }
+      }
+
       hitungPreviewTambahStokDetail();
       toggleFormJasaDetail();
 
@@ -4429,8 +4470,9 @@
     function hitungPreviewTambahStokDetail() {
       const qty = parseFloat(document.getElementById('detQtyTambah')?.value || '0') || 0;
       const konv = parseFloat(document.getElementById('detKonversiTambah')?.value || '1') || 1;
+      const satDasar = getSatuanDasarProduk(produkDetailAktif);
       const el = document.getElementById('previewDetTambahStok');
-      if (el) el.innerText = `+${qty * konv} Unit`;
+      if (el) el.innerText = `+${qty * konv} ${satDasar}`;
     }
 
     function pilihTabRiwayatBarang(tipe) {
@@ -4487,9 +4529,11 @@
       itemsNotaPembelian = [];
       document.getElementById('notaBeliNomor').value = 'NB-' + Date.now().toString().slice(-5);
       document.getElementById('notaBeliSupplier').value = '';
+      if (document.getElementById('cariProdukNota')) document.getElementById('cariProdukNota').value = '';
+      document.getElementById('listSaranProdukNota')?.classList.add('hidden');
       document.getElementById('cekNotaProdukBaru').checked = false;
       toggleNotaProdukBaru();
-      filterDropdownProdukNota();
+      filterDropdownProdukNota(false);
       renderTabelItemNotaPembelian();
       bukaModal('modalNotaPembelian');
     }
@@ -4498,24 +4542,90 @@
       const isBaru = document.getElementById('cekNotaProdukBaru')?.checked;
       document.getElementById('boxNotaPilihProduk')?.classList.toggle('hidden', isBaru);
       document.getElementById('boxNotaInputBaru')?.classList.toggle('hidden', !isBaru);
+      const lblJual = document.getElementById('labelNotaHargaJualUnit');
+      if (lblJual) {
+        if (isBaru) {
+          lblJual.innerText = 'H. Jual / pcs';
+        } else {
+          const kode = document.getElementById('selectProdukNota')?.value;
+          const p = daftarProduk.find(x => x.kode === kode);
+          lblJual.innerText = `H. Jual / ${getSatuanDasarProduk(p)}`;
+        }
+      }
     }
 
-    function filterDropdownProdukNota() {
+    function pilihProdukDariSaranNota(kode) {
+      const sel = document.getElementById('selectProdukNota');
+      const boxSaran = document.getElementById('listSaranProdukNota');
+      const p = daftarProduk.find(x => x.kode === kode);
+      if (sel && p) {
+        sel.value = p.kode;
+        if (document.getElementById('cariProdukNota')) {
+          document.getElementById('cariProdukNota').value = `${p.kode} - ${p.nama}`;
+        }
+        isiHargaDefaultNota();
+      }
+      if (boxSaran) boxSaran.classList.add('hidden');
+    }
+
+    function filterDropdownProdukNota(tampilkanSaran = true) {
       const q = (document.getElementById('cariProdukNota')?.value || '').trim().toLowerCase();
       const sel = document.getElementById('selectProdukNota');
+      const boxSaran = document.getElementById('listSaranProdukNota');
       if (!sel) return;
+
       const filtered = daftarProduk.filter(p =>
         !String(p.jenis || '').toLowerCase().includes('jasa') &&
         (!q || `${p.kode} ${p.barcode} ${p.nama}`.toLowerCase().includes(q))
       );
-      sel.innerHTML = filtered.map(p => `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok})</option>`).join('');
+
+      sel.innerHTML = filtered.map(p => {
+        const satDasar = getSatuanDasarProduk(p);
+        return `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok} ${satDasar})</option>`;
+      }).join('');
+
+      if (boxSaran) {
+        if (tampilkanSaran && q && filtered.length) {
+          boxSaran.classList.remove('hidden');
+          boxSaran.innerHTML = filtered.slice(0, 10).map(p => {
+            const satDasar = getSatuanDasarProduk(p);
+            return `
+              <button type="button" onclick="pilihProdukDariSaranNota('${p.kode}')"
+                class="w-full text-left px-3 py-2 hover:bg-brand-50 flex items-center justify-between gap-2 text-xs transition">
+                <div class="min-w-0">
+                  <div class="font-extrabold text-slate-900 truncate">${escapeHtmlStr(p.nama)}</div>
+                  <div class="text-[10.5px] font-mono text-slate-500">${p.kode}${p.barcode ? ' • ' + escapeHtmlStr(p.barcode) : ''}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 font-mono text-[10.5px] font-extrabold shrink-0">
+                  Stok: ${p.stok} ${escapeHtmlStr(satDasar)}
+                </span>
+              </button>
+            `;
+          }).join('');
+        } else if (tampilkanSaran && q && !filtered.length) {
+          boxSaran.classList.remove('hidden');
+          boxSaran.innerHTML = '<div class="px-3 py-2 text-xs text-slate-400">Barang tidak ditemukan. Centang "+ Produk Belum Ada" di atas untuk input baru.</div>';
+        } else {
+          boxSaran.classList.add('hidden');
+        }
+      }
+
       isiHargaDefaultNota();
     }
 
     function cekEnterBarcodeNota(e) {
       if (e.key === 'Enter') {
         e.preventDefault();
-        filterDropdownProdukNota();
+        const q = (document.getElementById('cariProdukNota')?.value || '').trim().toLowerCase();
+        filterDropdownProdukNota(true);
+        const exact = daftarProduk.find(p =>
+          !String(p.jenis || '').toLowerCase().includes('jasa') &&
+          (String(p.barcode || '').toLowerCase() === q || String(p.kode || '').toLowerCase() === q)
+        );
+        if (exact) {
+          pilihProdukDariSaranNota(exact.kode);
+          document.getElementById('notaQtyBeli')?.focus();
+        }
       }
     }
 
@@ -4523,6 +4633,9 @@
       const kode = document.getElementById('selectProdukNota')?.value;
       const p = daftarProduk.find(x => x.kode === kode);
       if (!p) return;
+      const satDasar = getSatuanDasarProduk(p);
+      const lblJual = document.getElementById('labelNotaHargaJualUnit');
+      if (lblJual) lblJual.innerText = `H. Jual / ${satDasar}`;
       const konv = Math.max(1, parseFloat(document.getElementById('notaKonversi')?.value || '1') || 1);
       document.getElementById('notaHargaBeli').value = Number(p.hargaBeli || 0) * konv;
       document.getElementById('notaHargaJual').value = Number(p.harga || 0);
@@ -4552,15 +4665,16 @@
         const jenis = document.getElementById('notaBaruJenis').value;
         if (!kode || !nama) return tampilkanToast('Kode dan nama produk baru wajib diisi!', '#dc2626');
         itemsNotaPembelian.push({
-          isBaru: true, kode, nama, jenis, qty, satuanNama, konversi,
+          isBaru: true, kode, nama, jenis, qty, satuanNama, satuanDasar: 'pcs', konversi,
           totalPcs: qty * konversi, hargaBeliSatuan, hargaJualUnit, subtotal: qty * hargaBeliSatuan
         });
       } else {
         const kode = document.getElementById('selectProdukNota')?.value;
         const p = daftarProduk.find(x => x.kode === kode);
         if (!p) return tampilkanToast('Pilih produk terlebih dahulu!', '#dc2626');
+        const satDasar = getSatuanDasarProduk(p);
         itemsNotaPembelian.push({
-          isBaru: false, kode: p.kode, nama: p.nama, jenis: p.jenis, qty, satuanNama, konversi,
+          isBaru: false, kode: p.kode, nama: p.nama, jenis: p.jenis, qty, satuanNama, satuanDasar: satDasar, konversi,
           totalPcs: qty * konversi, hargaBeliSatuan, hargaJualUnit: hargaJualUnit || p.harga, subtotal: qty * hargaBeliSatuan
         });
       }
@@ -4578,10 +4692,11 @@
       }
       tbody.innerHTML = itemsNotaPembelian.map((it, idx) => {
         total += it.subtotal;
+        const satDasar = it.satuanDasar || 'pcs';
         return `
           <tr>
             <td class="py-2 px-3 font-bold">${escapeHtmlStr(it.nama)} ${it.isBaru ? '<span class="text-[10px] text-brand-600">(Baru)</span>' : ''}</td>
-            <td class="py-2 px-3 font-mono">${it.qty} ${escapeHtmlStr(it.satuanNama)} (= ${it.totalPcs} Unit)</td>
+            <td class="py-2 px-3 font-mono">${it.qty} ${escapeHtmlStr(it.satuanNama)} (= ${it.totalPcs} ${escapeHtmlStr(satDasar)})</td>
             <td class="py-2 px-3 text-right font-mono">${formatRupiah(it.hargaBeliSatuan)}</td>
             <td class="py-2 px-3 text-right font-mono font-bold">${formatRupiah(it.subtotal)}</td>
             <td class="py-2 px-3 text-center"><button type="button" onclick="itemsNotaPembelian.splice(${idx},1);renderTabelItemNotaPembelian();" class="text-rose-600 font-bold">✕</button></td>
@@ -4748,7 +4863,7 @@
         !String(p.jenis || '').toLowerCase().includes('jasa') &&
         (!q || `${p.kode} ${p.barcode} ${p.nama}`.toLowerCase().includes(q))
       );
-      sel.innerHTML = '<option value="">-- Pilih Produk --</option>' + list.map(p => `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok})</option>`).join('');
+      sel.innerHTML = '<option value="">-- Pilih Produk --</option>' + list.map(p => `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok} ${getSatuanDasarProduk(p)})</option>`).join('');
       if (list.length === 1 && q) {
         sel.value = list[0].kode;
         tampilkanInfoStokKoreksi();
@@ -4758,7 +4873,7 @@
     function tampilkanInfoStokKoreksi() {
       const kode = document.getElementById('selectProdukKoreksi')?.value;
       const p = daftarProduk.find(x => x.kode === kode);
-      document.getElementById('korStokSistem').value = p ? p.stok : 0;
+      document.getElementById('korStokSistem').value = p ? `${p.stok} ${getSatuanDasarProduk(p)}` : '0 pcs';
     }
 
     async function simpanKoreksiStok() {
@@ -4835,7 +4950,7 @@
         !String(p.jenis || '').toLowerCase().includes('jasa') &&
         (!q || `${p.kode} ${p.nama}`.toLowerCase().includes(q))
       );
-      sel.innerHTML = list.map(p => `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok})</option>`).join('');
+      sel.innerHTML = list.map(p => `<option value="${p.kode}">${p.kode} - ${p.nama} (Stok: ${p.stok} ${getSatuanDasarProduk(p)})</option>`).join('');
     }
 
     async function prosesSimpanKeperluanToko() {
@@ -5433,9 +5548,17 @@
       }
       if (scannerTargetMode === 'nota_cari') {
         document.getElementById('cariProdukNota').value = kodeScan;
-        filterDropdownProdukNota();
+        filterDropdownProdukNota(true);
+        const exact = daftarProduk.find(p =>
+          !String(p.jenis || '').toLowerCase().includes('jasa') &&
+          (String(p.barcode || '').toLowerCase() === kodeScan.toLowerCase() || String(p.kode || '').toLowerCase() === kodeScan.toLowerCase())
+        );
         const sel = document.getElementById('selectProdukNota');
-        if (sel && sel.value) {
+        if (exact) {
+          pilihProdukDariSaranNota(exact.kode);
+          tampilkanToast(`Produk dipilih: ${exact.nama}`);
+          document.getElementById('notaQtyBeli')?.focus();
+        } else if (sel && sel.value) {
           tampilkanToast(`Produk dipilih: ${sel.options[sel.selectedIndex]?.text || kodeScan}`);
           document.getElementById('notaQtyBeli')?.focus();
         } else {
