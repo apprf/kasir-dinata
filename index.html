@@ -1944,6 +1944,37 @@
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
     }
 
+    // Mengubah timestamp WIB ("dd/MM/yyyy HH:mm:ss" atau ISO) menjadi objek Date lokal yang akurat
+    function parseTimestampWIBKeDate(val) {
+      if (!val || val === '-') return null;
+      if (val instanceof Date && !isNaN(val.getTime())) return val;
+      const s = String(val).trim();
+      const mId = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+      if (mId) {
+        return new Date(
+          Number(mId[3]),
+          Number(mId[2]) - 1,
+          Number(mId[1]),
+          Number(mId[4] || 0),
+          Number(mId[5] || 0),
+          Number(mId[6] || 0)
+        );
+      }
+      const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s]+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+      if (mIso) {
+        return new Date(
+          Number(mIso[1]),
+          Number(mIso[2]) - 1,
+          Number(mIso[3]),
+          Number(mIso[4] || 0),
+          Number(mIso[5] || 0),
+          Number(mIso[6] || 0)
+        );
+      }
+      const d = new Date(s);
+      return isNaN(d.getTime()) ? null : d;
+    }
+
     function tampilkanToast(pesan, warna = '#059669') {
       const container = document.getElementById('toastContainer');
       if (!container) return;
@@ -4146,7 +4177,109 @@
 
     function hitungTotalAsetManual() {
       const tgl = document.getElementById('tglHitungAset')?.value || getHariIniISO();
-      document.getElementById('labelTglAset').innerText = formatTanggalIndo(tgl);
+      const hariIniISO = getHariIniISO();
+      const isTanggalLampau = tgl < hariIniISO;
+      document.getElementById('labelTglAset').innerText = `${formatTanggalIndo(tgl)} 23:59`;
+
+      // Batas akhir hari pada tanggal yang dipilih: pukul 23:59:59.999
+      const [thn, bln, hri] = tgl.split('-').map(Number);
+      const batasAkhirHari = new Date(thn, (bln || 1) - 1, hri || 1, 23, 59, 59, 999);
+
+      // Siapkan peta stok barang saat ini untuk direkonstruksi mundur jika tanggal < hari ini
+      const stokPerKode = {};
+      const mapKodeByNama = {};
+      daftarProduk.forEach(p => {
+        stokPerKode[p.kode] = Number(p.stok || 0);
+        if (p.nama) mapKodeByNama[String(p.nama).trim().toLowerCase()] = p.kode;
+      });
+
+      if (isTanggalLampau) {
+        // 1. Balikkan seluruh mutasi transaksi, pembelian stok, dan keperluan toko yang terjadi SETELAH tanggal dipilih ( > 23:59:59 )
+        dataLaporanSemua.forEach(lap => {
+          const waktuTrx = parseTimestampWIBKeDate(lap.waktu);
+          if (!waktuTrx || waktuTrx <= batasAkhirHari) return;
+
+          const kat = String(lap.kategori || '').toLowerCase();
+          const detailLow = String(lap.detailInfo || '').toLowerCase();
+
+          // Penjualan aktif (bukan yang sudah dihapus) -> saat terjadi mengurangi stok, jadi mundurkan dengan menambah kembali
+          if ((kat.includes('penjualan') || kat.includes('belum lunas')) && !kat.includes('dihapus') && !detailLow.includes('dihapus oleh:')) {
+            const items = parseItemsDariKeteranganLaporan(lap.keterangan);
+            items.forEach(it => {
+              if (!it.isJasa && it.kode && stokPerKode[it.kode] !== undefined) {
+                const unit = Number(it.qty || 0) * Math.max(1, Number(it.konversi || 1));
+                stokPerKode[it.kode] += unit;
+              }
+            });
+          } else if (kat.includes('pembelian stok')) {
+            // Pembelian stok menambah stok, jadi mundurkan dengan mengurangi
+            const parts = String(lap.keterangan || '').split(', ');
+            parts.forEach(str => {
+              const m = str.match(/^(.+?)\s*\(([\d.,]+)\s*([^)]+)\)$/);
+              if (m) {
+                const namaBrg = m[1].trim().toLowerCase();
+                const qty = parseFloat(m[2].replace(',', '.')) || 0;
+                const satNama = m[3].trim().toLowerCase();
+                const kode = mapKodeByNama[namaBrg];
+                if (kode && stokPerKode[kode] !== undefined) {
+                  const satObj = daftarSatuanMaster.find(s => String(s.nama).toLowerCase() === satNama);
+                  const konv = satObj ? Math.max(1, Number(satObj.konversi || 1)) : 1;
+                  stokPerKode[kode] = Math.max(0, stokPerKode[kode] - (qty * konv));
+                }
+              }
+            });
+          }
+        });
+
+        // 2. Balikkan pemakaian stok keperluan toko yang disetujui SETELAH tanggal dipilih
+        daftarKeperluanToko.forEach(kep => {
+          const waktuKep = parseTimestampWIBKeDate(kep.waktu);
+          if (!waktuKep || waktuKep <= batasAkhirHari) return;
+          if (kep.jenis === 'Pemakaian Stok Toko' && String(kep.status || '').toLowerCase().includes('setuju')) {
+            const kode = kep.kodeProduk || mapKodeByNama[String(kep.namaItem || '').trim().toLowerCase()];
+            if (kode && stokPerKode[kode] !== undefined) {
+              stokPerKode[kode] += Number(kep.qty || 0);
+            }
+          }
+        });
+
+        // 3. Cek histori penambahan stok & koreksi stok per produk jika ada pencatatan setelah batas tanggal
+        daftarProduk.forEach(p => {
+          const kode = p.kode;
+          if (stokPerKode[kode] === undefined) return;
+
+          // Parse baris histori penambahan stok langsung: "[dd/MM/yyyy HH:mm:ss] +X Unit oleh ..."
+          String(p.historiStok || '').split('\n').forEach(line => {
+            const m = line.match(/^\[([^\]]+)\]\s*\+([\d.,]+)\s*Unit/i);
+            if (m) {
+              const tglLog = parseTimestampWIBKeDate(m[1]);
+              if (tglLog && tglLog > batasAkhirHari) {
+                const tambah = parseFloat(m[2].replace(',', '.')) || 0;
+                stokPerKode[kode] = Math.max(0, stokPerKode[kode] - tambah);
+              }
+            }
+          });
+
+          // Parse histori koreksi stok: "[dd/MM/yyyy HH:mm:ss] stokLama -> stokBaru (...)"
+          const koreksiSesudah = [];
+          String(p.historiKoreksi || '').split('\n').forEach(line => {
+            const m = line.match(/^\[([^\]]+)\]\s*([\d.,]+)\s*->\s*([\d.,]+)/);
+            if (m) {
+              const tglKor = parseTimestampWIBKeDate(m[1]);
+              if (tglKor && tglKor > batasAkhirHari) {
+                koreksiSesudah.push({
+                  waktu: tglKor,
+                  stokLama: parseFloat(m[2].replace(',', '.')) || 0
+                });
+              }
+            }
+          });
+          if (koreksiSesudah.length) {
+            koreksiSesudah.sort((a, b) => a.waktu - b.waktu);
+            stokPerKode[kode] = koreksiSesudah[0].stokLama;
+          }
+        });
+      }
 
       let totalBarang = 0;
       const rowsHtml = [];
@@ -4154,7 +4287,7 @@
       daftarProduk.forEach(p => {
         const isJasa = String(p.jenis || '').toLowerCase().includes('jasa');
         if (isJasa) return;
-        const stok = Number(p.stok || 0);
+        const stok = Math.max(0, Number(stokPerKode[p.kode] ?? p.stok ?? 0));
         const hBeli = Number(p.hargaBeli || 0);
         const sub = stok * hBeli;
         totalBarang += sub;
@@ -4162,16 +4295,33 @@
           <tr>
             <td class="py-1.5 px-3 text-slate-500">Stok Barang</td>
             <td class="py-1.5 px-3 font-bold">${escapeHtmlStr(p.nama)}</td>
-            <td class="py-1.5 px-3 text-center font-mono">${stok}</td>
+            <td class="py-1.5 px-3 text-center font-mono">${stok} ${escapeHtmlStr(getSatuanDasarProduk(p))}</td>
             <td class="py-1.5 px-3 text-right font-mono">${formatRupiah(hBeli)}</td>
             <td class="py-1.5 px-3 text-right font-mono font-bold">${formatRupiah(sub)}</td>
           </tr>
         `);
       });
 
+      // Rekonstruksi saldo akun digital per akhir tanggal dipilih (23:59:59)
+      const saldoDigitalPerAkun = {};
+      daftarSumberDana.forEach(d => {
+        saldoDigitalPerAkun[d.nama] = Number(d.saldo || 0);
+      });
+
+      if (isTanggalLampau) {
+        daftarRiwayatDigital.forEach(rw => {
+          const waktuRw = parseTimestampWIBKeDate(rw.waktu);
+          if (!waktuRw || waktuRw <= batasAkhirHari) return;
+          if (saldoDigitalPerAkun[rw.sumberDana] !== undefined) {
+            // Nominal di riwayat digital bertanda + untuk topup/saldo awal dan - untuk transaksi keluar
+            saldoDigitalPerAkun[rw.sumberDana] = Math.max(0, saldoDigitalPerAkun[rw.sumberDana] - Number(rw.nominal || 0));
+          }
+        });
+      }
+
       let totalDigital = 0;
       daftarSumberDana.forEach(d => {
-        const saldo = Number(d.saldo || 0);
+        const saldo = Math.max(0, Number(saldoDigitalPerAkun[d.nama] ?? d.saldo ?? 0));
         totalDigital += saldo;
         rowsHtml.push(`
           <tr>
