@@ -3,6 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="POS Kasir" />
+  <link id="pwaManifestLink" rel="manifest" />
+  <link id="pwaAppleIconLink" rel="apple-touch-icon" />
   <title>POS Kasir Multi-User & Cloud Sync</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
@@ -157,6 +164,11 @@
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Terhubung
           </span>
         </div>
+        <!-- Tombol Install PWA di Layar Login (Muncul otomatis di Chrome HP / Android) -->
+        <button type="button" onclick="triggerInstallPWA()"
+          class="btn-install-pwa hidden mt-3 w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-extrabold text-xs shadow-lg flex items-center justify-center gap-1.5 transition">
+          <span>📲</span> Install Aplikasi POS ke Layar Utama HP
+        </button>
       </div>
 
       <div class="p-6 space-y-4">
@@ -222,6 +234,10 @@
           </div>
 
           <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="triggerInstallPWA()" title="Install Aplikasi ke HP"
+              class="btn-install-pwa hidden px-2.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-slate-950 text-xs font-extrabold transition shadow flex items-center gap-1">
+              <span>📲</span> <span class="hidden sm:inline">Install</span>
+            </button>
             <button type="button" onclick="muatSemuaDataAwal(true)" title="Sinkronkan ulang database Cloud" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
               🔄
             </button>
@@ -5584,8 +5600,141 @@
     // =========================================================================
     // 17. INISIALISASI HALAMAN SAAT PERTAMA DIMUAT
     // =========================================================================
+    let deferredInstallPromptPWA = null;
+
+    function buatIkonPWADataURL(ukuran, logoTokoBase64) {
+      const canvas = document.createElement('canvas');
+      canvas.width = ukuran;
+      canvas.height = ukuran;
+      const ctx = canvas.getContext('2d');
+
+      // Latar belakang rounded biru-gelap profesional
+      ctx.fillStyle = '#0f172a';
+      ctx.fillRect(0, 0, ukuran, ukuran);
+
+      const pad = Math.round(ukuran * 0.12);
+      ctx.fillStyle = '#2563eb';
+      ctx.beginPath();
+      ctx.roundRect(pad, pad, ukuran - pad * 2, ukuran - pad * 2, Math.round(ukuran * 0.2));
+      ctx.fill();
+
+      // Tulisan POS sebagai ikon default yang tajam
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `800 ${Math.round(ukuran * 0.28)}px Inter, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('POS', ukuran / 2, ukuran / 2);
+
+      return canvas.toDataURL('image/png');
+    }
+
+    function perbaruiManifestPWA() {
+      try {
+        const namaAplikasi = (infoToko && infoToko.namaToko) ? infoToko.namaToko : 'POS Kasir';
+        const icon192 = buatIkonPWADataURL(192, infoToko?.logoToko);
+        const icon512 = buatIkonPWADataURL(512, infoToko?.logoToko);
+
+        const appleLink = document.getElementById('pwaAppleIconLink');
+        if (appleLink) appleLink.href = icon192;
+
+        const manifestObj = {
+          name: namaAplikasi,
+          short_name: namaAplikasi.slice(0, 15),
+          description: 'Aplikasi POS Kasir Multi-User & Cloud Sync',
+          start_url: window.location.href,
+          scope: './',
+          display: 'standalone',
+          orientation: 'portrait-primary',
+          background_color: '#0f172a',
+          theme_color: '#0f172a',
+          icons: [
+            { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
+            { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          ]
+        };
+
+        const blob = new Blob([JSON.stringify(manifestObj)], { type: 'application/manifest+json' });
+        const manifestUrl = URL.createObjectURL(blob);
+        const manifestLink = document.getElementById('pwaManifestLink');
+        if (manifestLink) {
+          if (manifestLink.dataset.blobUrl) URL.revokeObjectURL(manifestLink.dataset.blobUrl);
+          manifestLink.href = manifestUrl;
+          manifestLink.dataset.blobUrl = manifestUrl;
+        }
+      } catch (e) {}
+    }
+
+    async function daftarkanServiceWorkerPWA() {
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        const swCode = `
+          const CACHE_NAME = 'pos-kasir-pwa-v1';
+          self.addEventListener('install', (event) => {
+            self.skipWaiting();
+          });
+          self.addEventListener('activate', (event) => {
+            event.waitUntil(self.clients.claim());
+          });
+          self.addEventListener('fetch', (event) => {
+            if (event.request.method !== 'GET') return;
+            event.respondWith(
+              fetch(event.request)
+                .then((response) => {
+                  if (response && response.status === 200 && response.type === 'basic') {
+                    const copy = response.clone();
+                    caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+                  }
+                  return response;
+                })
+                .catch(() => caches.match(event.request))
+            );
+          });
+        `;
+        const swBlob = new Blob([swCode], { type: 'application/javascript' });
+        const swUrl = URL.createObjectURL(swBlob);
+        await navigator.serviceWorker.register(swUrl);
+      } catch (e) {
+        // Fallback aman jika dibuka lewat file:// atau sandbox iframe yang membatasi blob SW
+      }
+    }
+
+    function tampilkanTombolInstallPWA(tampil) {
+      document.querySelectorAll('.btn-install-pwa').forEach(btn => {
+        btn.classList.toggle('hidden', !tampil);
+      });
+    }
+
+    async function triggerInstallPWA() {
+      if (deferredInstallPromptPWA) {
+        deferredInstallPromptPWA.prompt();
+        const { outcome } = await deferredInstallPromptPWA.userChoice;
+        if (outcome === 'accepted') {
+          tampilkanToast('Aplikasi POS sedang diinstal ke perangkat Anda!');
+          tampilkanTombolInstallPWA(false);
+        }
+        deferredInstallPromptPWA = null;
+      } else {
+        tampilkanToast('Buka menu titik tiga (⋮) di pojok kanan atas Chrome lalu pilih "Tambahkan ke layar utama" / "Install aplikasi".', '#2563eb');
+      }
+    }
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredInstallPromptPWA = e;
+      tampilkanTombolInstallPWA(true);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPromptPWA = null;
+      tampilkanTombolInstallPWA(false);
+      tampilkanToast('Aplikasi POS berhasil terinstal di HP Anda!');
+    });
+
     document.addEventListener('DOMContentLoaded', async () => {
       try {
+        perbaruiManifestPWA();
+        daftarkanServiceWorkerPWA();
+
         try {
           const savedFormat = localStorage.getItem('POS_FORMAT_CETAK_DEFAULT');
           if (savedFormat && document.getElementById('formatCetakStruk')) {
@@ -5604,6 +5753,7 @@
         });
 
         await muatPengaturanToko();
+        perbaruiManifestPWA();
 
         if (pulihkanSesiLoginJikaMasihValid()) {
           await masukKeAplikasi();
