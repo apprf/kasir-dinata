@@ -511,7 +511,10 @@
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
           <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-            <h2 class="text-base font-extrabold text-slate-900">💳 Daftar DP & Piutang Jatuh Tempo</h2>
+            <div>
+              <h2 class="text-base font-extrabold text-slate-900">💳 Daftar DP & Piutang Jatuh Tempo</h2>
+              <p class="text-[11px] text-slate-500">Terbuka untuk semua petugas (Kasir, Manager, Owner) untuk melihat & memproses cicilan maupun pelunasan.</p>
+            </div>
             <div class="flex items-center gap-2">
               <input type="text" id="cariPiutang" oninput="renderTabelPiutang()" placeholder="Cari pelanggan / nota..."
                 class="px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-medium outline-none" />
@@ -529,9 +532,9 @@
                 <tr>
                   <th class="py-2.5 px-3">Nota & Tgl</th>
                   <th class="py-2.5 px-3">Pelanggan</th>
-                  <th class="py-2.5 px-3">Petugas (Buat & Lunas)</th>
+                  <th class="py-2.5 px-3">Petugas & Riwayat Pembayaran</th>
                   <th class="py-2.5 px-3">Jatuh Tempo</th>
-                  <th class="py-2.5 px-3 text-right">Total / DP</th>
+                  <th class="py-2.5 px-3 text-right">Total / Terbayar</th>
                   <th class="py-2.5 px-3 text-right">Sisa Tagihan</th>
                   <th class="py-2.5 px-3 text-center">Status & Aksi</th>
                 </tr>
@@ -837,7 +840,8 @@
               <select id="lapFilterKategori" onchange="renderTabelLaporan()" class="w-full px-2.5 py-1.5 rounded-xl border border-slate-300 text-xs font-bold bg-white">
                 <option value="">Semua Kategori</option>
                 <option value="penjualan">Penjualan Lunas</option>
-                <option value="belum lunas">Belum Lunas (DP/Tempo)</option>
+                <option value="belum lunas">Belum Lunas (DP/Cicilan)</option>
+                <option value="cicilan">Cicilan Piutang</option>
                 <option value="pelunasan">Pelunasan Piutang</option>
                 <option value="pembelian">Pembelian Stok</option>
                 <option value="keperluan">Keperluan Toko</option>
@@ -1572,21 +1576,44 @@
   <div id="modalPelunasanDP" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl">
       <div class="px-4 py-3 bg-slate-900 text-white flex items-center justify-between">
-        <h3 class="text-sm font-extrabold">💳 Pembayaran / Pelunasan DP</h3>
+        <h3 class="text-sm font-extrabold">💳 Pembayaran Cicilan / Pelunasan DP</h3>
         <button type="button" onclick="tutupModal('modalPelunasanDP')" class="text-slate-400 hover:text-white font-bold text-sm">✕</button>
       </div>
-      <div class="p-4 space-y-3">
+      <div class="p-4 space-y-3 max-h-[85vh] overflow-y-auto">
         <input type="hidden" id="pelunasanIdTrx" />
         <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs space-y-1">
           <div>Nota: <strong id="pelunasanNotaLabel" class="font-mono">-</strong></div>
           <div>Pelanggan: <strong id="pelunasanPelangganLabel">-</strong></div>
+          <div>Total Tagihan: <strong id="pelunasanTotalLabel" class="font-mono text-slate-800">Rp 0</strong> • Sudah Dibayar: <strong id="pelunasanSudahBayarLabel" class="font-mono text-emerald-700">Rp 0</strong></div>
           <div>Sisa Tagihan: <strong id="pelunasanSisaLabel" class="font-mono text-rose-600">Rp 0</strong></div>
         </div>
-        <div>
-          <label class="block text-xs font-bold text-slate-700 mb-1">Nominal Bayar Pelunasan / Cicilan (Rp) *</label>
-          <input type="number" step="any" inputmode="decimal" id="pelunasanNominalInput" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 font-mono text-sm font-extrabold" />
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-bold text-slate-700">Nominal Bayar (Rp) *</label>
+              <button type="button" onclick="isiNominalLunasPenuh()" class="text-[10.5px] font-extrabold text-brand-600 hover:underline">Lunasi Penuh</button>
+            </div>
+            <input type="number" step="any" inputmode="decimal" id="pelunasanNominalInput" oninput="perbaruiPreviewStatusCicilanModal()"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-sm font-extrabold outline-none focus:border-brand-600" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Metode Pembayaran *</label>
+            <select id="pelunasanMetodeSelect"
+              class="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-extrabold bg-white outline-none focus:border-brand-600">
+              <option value="Tunai">💵 Tunai</option>
+              <option value="Transfer Bank">🏦 Transfer Bank</option>
+              <option value="QRIS">📱 QRIS</option>
+            </select>
+          </div>
         </div>
-        <button type="button" onclick="prosesSimpanPelunasanDP()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow">
+        <div id="previewStatusCicilanBox" class="px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-bold text-amber-900">
+          Status setelah bayar: -
+        </div>
+        <div id="boxRiwayatCicilanModal" class="hidden bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-1">
+          <div class="text-[11px] font-extrabold text-slate-700">📜 Riwayat Pembayaran Sebelumnya:</div>
+          <div id="listRiwayatCicilanModal" class="space-y-1 text-[11px] text-slate-600 max-h-28 overflow-y-auto"></div>
+        </div>
+        <button type="button" id="btnSimpanPelunasanDP" onclick="prosesSimpanPelunasanDP()" class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow">
           💾 Simpan Pembayaran
         </button>
       </div>
@@ -1926,6 +1953,44 @@
       if (!isUserKasirAktif()) return true;
       const loginNama = String(currentUser?.nama || '').trim().toLowerCase();
       return String(namaPetugas || '').trim().toLowerCase() === loginNama;
+    }
+
+    function apakahKasirTerlibatPadaNota(idNota, rowLaporan) {
+      if (!isUserKasirAktif()) return true;
+      const loginNama = String(currentUser?.nama || '').trim().toLowerCase();
+      if (!loginNama) return false;
+
+      if (rowLaporan && String(rowLaporan.user || '').trim().toLowerCase() === loginNama) {
+        return true;
+      }
+
+      const idBersih = String(idNota || '').replace(/^(PL|CC)-/i, '').replace(/-\d{3}$/, '');
+      const piutangTerkait = daftarPiutangAll.find(p =>
+        String(p.id) === String(idNota) || (idBersih && String(p.id) === idBersih)
+      );
+      if (piutangTerkait) {
+        if (String(piutangTerkait.kasir || '').trim().toLowerCase() === loginNama) return true;
+        if (String(piutangTerkait.pelunas || '').trim().toLowerCase() === loginNama) return true;
+        if (Array.isArray(piutangTerkait.riwayatBayar)) {
+          const pernahBayar = piutangTerkait.riwayatBayar.some(rb =>
+            String(rb.dibayarOleh || '').trim().toLowerCase() === loginNama ||
+            String(rb.dilunasiOleh || '').trim().toLowerCase() === loginNama
+          );
+          if (pernahBayar) return true;
+        }
+      }
+
+      if (rowLaporan) {
+        const teksAudit = `${rowLaporan.keterangan || ''} ${rowLaporan.detailInfo || ''}`.toLowerCase();
+        if (
+          teksAudit.includes(`oleh ${loginNama}`) ||
+          teksAudit.includes(`oleh: ${loginNama}`)
+        ) {
+          return true;
+        }
+      }
+
+      return false;
     }
 
     function tanggalKeISO(val) {
@@ -3152,7 +3217,7 @@
       db.laporan.unshift({
         waktu: waktuTrx,
         id: idTrx,
-        kategori: isDP ? 'Belum Lunas (DP/Tempo)' : 'Penjualan',
+        kategori: isDP ? 'Belum Lunas (DP/Cicilan)' : 'Penjualan',
         user: currentUser.nama,
         keterangan: detailBarang,
         nominal: total,
@@ -3160,6 +3225,29 @@
           ? `Pelanggan: ${namaPelanggan} | Tempo: ${formatTanggalIndo(jatuhTempoISO)} | DP: ${formatRupiah(bayar)} | Sisa: ${formatRupiah(sisaTagihan)}`
           : `Pelanggan: ${namaPelanggan}${diskonNominal > 0 ? ' | Diskon: ' + formatRupiah(diskonNominal) : ''} | Lunas`
       });
+      if (isDP) {
+        db.piutang = db.piutang || [];
+        db.piutang.unshift({
+          id: idTrx,
+          waktu: waktuTrx,
+          pelanggan: namaPelanggan,
+          noHp: noHpPelanggan,
+          kasir: currentUser.nama,
+          pelunas: '-',
+          jatuhTempo: formatTanggalIndo(jatuhTempoISO),
+          total: total,
+          sudahBayar: bayar,
+          sisaTagihan: sisaTagihan,
+          status: 'Belum Lunas',
+          riwayatBayar: bayar > 0 ? [{
+            tipe: 'DP Awal',
+            nominal: bayar,
+            metode: 'Tunai',
+            dibayarOleh: currentUser.nama,
+            waktuBayar: waktuTrx
+          }] : []
+        });
+      }
       saveSimDB(db);
 
       tampilkanStruk({
@@ -3642,8 +3730,12 @@
       const mPlg = info.match(/Pelanggan:\s*([^|]+)/i);
       const mTempo = info.match(/Tempo:\s*([^|]+)/i);
       const mDP = info.match(/DP:\s*Rp\s*([\d.]+)/i);
+      const mTerbayar = info.match(/Terbayar:\s*Rp\s*([\d.]+)/i);
       const mSisa = info.match(/Sisa:\s*Rp\s*([\d.]+)/i);
-      const isDP = String(row.kategori || '').toLowerCase().includes('belum lunas');
+      const piutangMatch = daftarPiutangAll.find(p => String(p.id) === String(row.id));
+      const sisaAktual = piutangMatch ? Number(piutangMatch.sisaTagihan || 0) : (mSisa ? Number(mSisa[1].replace(/\./g, '')) : 0);
+      const sudahAktual = piutangMatch ? Number(piutangMatch.sudahBayar || 0) : (mTerbayar ? Number(mTerbayar[1].replace(/\./g, '')) : (mDP ? Number(mDP[1].replace(/\./g, '')) : Number(row.nominal || 0)));
+      const isDP = sisaAktual > 0 || String(row.kategori || '').toLowerCase().includes('belum lunas');
 
       tampilkanStruk({
         id: row.id,
@@ -3654,11 +3746,11 @@
         subtotal: Number(row.nominal || 0),
         diskonNominal: 0,
         total: Number(row.nominal || 0),
-        bayar: isDP && mDP ? Number(mDP[1].replace(/\./g, '')) : Number(row.nominal || 0),
+        bayar: isDP ? sudahAktual : Number(row.nominal || 0),
         kembalian: 0,
-        sisaTagihan: isDP && mSisa ? Number(mSisa[1].replace(/\./g, '')) : 0,
+        sisaTagihan: isDP ? sisaAktual : 0,
         isDP: isDP,
-        jatuhTempo: mTempo ? formatTanggalIndo(mTempo[1].trim()) : '-'
+        jatuhTempo: mTempo ? formatTanggalIndo(mTempo[1].trim()) : (piutangMatch?.jatuhTempo || '-')
       });
     }
 
@@ -3669,12 +3761,11 @@
       const tbody = document.getElementById('tabelRiwayatKasir');
       if (!tbody) return;
 
-      const loginNama = String(currentUser?.nama || '').trim().toLowerCase();
       const list = dataLaporanSemua.filter(r => {
         const kat = String(r.kategori || '').toLowerCase();
         const isTrxJual = kat.includes('penjualan') || kat.includes('belum lunas') || kat.includes('dihapus');
         if (!isTrxJual) return false;
-        return String(r.user || '').trim().toLowerCase() === loginNama;
+        return apakahKasirTerlibatPadaNota(r.id, r);
       }).slice(0, 25);
 
       if (!list.length) {
@@ -3684,7 +3775,10 @@
 
       tbody.innerHTML = list.map(r => {
         const kat = String(r.kategori || '').toLowerCase();
-        const isDP = kat.includes('belum lunas');
+        const piutangNota = daftarPiutangAll.find(p => String(p.id) === String(r.id));
+        const sisaPiutang = piutangNota ? Number(piutangNota.sisaTagihan || 0) : 0;
+        const sudahPiutang = piutangNota ? Number(piutangNota.sudahBayar || 0) : 0;
+        const isDP = sisaPiutang > 0 || (kat.includes('belum lunas') && (!piutangNota || sisaPiutang > 0));
         const isDihapus = kat.includes('dihapus') || String(r.detailInfo || '').toLowerCase().includes('dihapus oleh:');
         const auditEdit = ekstrakAuditEditTransaksi(r);
         const pendingItem = daftarPendingTransaksi.find(pt =>
@@ -3693,7 +3787,17 @@
 
         let statusBadge = '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold">Lunas</span>';
         if (isDihapus) statusBadge = '<span class="px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 text-[10px] font-extrabold">Dihapus</span>';
-        else if (isDP) statusBadge = '<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">DP / Tempo</span>';
+        else if (isDP) statusBadge = `<span class="px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-extrabold">Belum Lunas (Sisa ${formatRupiah(sisaPiutang)})</span>`;
+
+        const riwayatBayarHtml = (piutangNota && Array.isArray(piutangNota.riwayatBayar) && piutangNota.riwayatBayar.length)
+          ? piutangNota.riwayatBayar.map(rb => {
+              const pelaku = rb.dilunasiOleh || rb.dibayarOleh || '-';
+              const label = rb.tipe === 'Pelunasan'
+                ? `Dilunasi oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`
+                : `${escapeHtmlStr(rb.tipe || 'Cicilan')} ${formatRupiah(rb.nominal)} oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`;
+              return `<div class="text-[10px] font-bold text-emerald-700 mt-0.5">💳 ${label}</div>`;
+            }).join('')
+          : '';
 
         return `
           <tr class="hover:bg-slate-50 ${isDihapus ? 'opacity-65 bg-rose-50/40' : ''}">
@@ -3706,6 +3810,8 @@
             <td class="py-2 px-3 text-slate-700 max-w-[230px]">
               <div class="truncate font-semibold" title="${escapeHtmlStr(r.keterangan)}">${escapeHtmlStr(r.keterangan)}</div>
               ${r.detailInfo ? `<div class="text-[10px] text-slate-500 mt-0.5 leading-tight">${escapeHtmlStr(r.detailInfo)}</div>` : ''}
+              ${piutangNota && sisaPiutang > 0 ? `<div class="text-[10px] font-extrabold text-amber-800 mt-0.5">Terbayar: ${formatRupiah(sudahPiutang)} • Sisa: ${formatRupiah(sisaPiutang)}</div>` : ''}
+              ${riwayatBayarHtml}
               ${pendingItem ? `<div class="text-[10px] font-extrabold text-amber-700 mt-0.5">⏳ Menunggu ACC ${pendingItem.tipeAksi} (${escapeHtmlStr(pendingItem.pengaju)})</div>` : ''}
             </td>
             <td class="py-2 px-3 text-right font-mono font-extrabold text-slate-900">${formatRupiah(r.nominal)}</td>
@@ -3999,11 +4105,18 @@
       const teksCari = (document.getElementById('lapCariTeks')?.value || '').trim().toLowerCase();
 
       const filtered = dataLaporanSemua.filter(r => {
-        if (!cocokDenganUserLogin(r.user)) return false;
+        if (!apakahKasirTerlibatPadaNota(r.id, r)) return false;
         const tglISO = tanggalKeISO(r.waktu);
         if (tglMulai && tglISO && tglISO < tglMulai) return false;
         if (tglAkhir && tglISO && tglISO > tglAkhir) return false;
-        const kat = String(r.kategori || '').toLowerCase();
+
+        const piutangNota = daftarPiutangAll.find(p => String(p.id) === String(r.id));
+        const sisaAktual = piutangNota ? Number(piutangNota.sisaTagihan || 0) : 0;
+        const katAktual = (piutangNota && sisaAktual > 0 && !String(r.kategori || '').toLowerCase().includes('dihapus'))
+          ? 'Belum Lunas (DP/Cicilan)'
+          : String(r.kategori || '');
+        const kat = katAktual.toLowerCase();
+
         if (katFilter && !kat.includes(katFilter)) return false;
         if (userFilter && String(r.user || '').trim().toLowerCase() !== userFilter) return false;
         if (teksCari) {
@@ -4017,9 +4130,14 @@
       let totDP = 0;
       let totKeluar = 0;
       filtered.forEach(r => {
-        const k = String(r.kategori || '').toLowerCase();
+        const piutangNota = daftarPiutangAll.find(p => String(p.id) === String(r.id));
+        const sisaAktual = piutangNota ? Number(piutangNota.sisaTagihan || 0) : 0;
+        const katAktual = (piutangNota && sisaAktual > 0 && !String(r.kategori || '').toLowerCase().includes('dihapus'))
+          ? 'Belum Lunas (DP/Cicilan)'
+          : String(r.kategori || '');
+        const k = katAktual.toLowerCase();
         const nom = Number(r.nominal || 0);
-        if (k.includes('penjualan') || k.includes('pelunasan')) totPenjualan += nom;
+        if (k.includes('penjualan') || k.includes('pelunasan') || k.includes('cicilan piutang')) totPenjualan += nom;
         else if (k.includes('belum lunas')) totDP += nom;
         else if (k.includes('keperluan') || k.includes('pembelian')) totKeluar += nom;
       });
@@ -4035,17 +4153,32 @@
       }
 
       tbody.innerHTML = filtered.map(r => {
-        const kat = String(r.kategori || '');
+        const piutangNota = daftarPiutangAll.find(p => String(p.id) === String(r.id));
+        const sisaAktual = piutangNota ? Number(piutangNota.sisaTagihan || 0) : 0;
+        const sudahAktual = piutangNota ? Number(piutangNota.sudahBayar || 0) : 0;
+        const isDihapus = String(r.kategori || '').toLowerCase().includes('dihapus');
+        const kat = (piutangNota && !isDihapus)
+          ? (sisaAktual <= 0 ? 'Penjualan (Lunas DP)' : 'Belum Lunas (DP/Cicilan)')
+          : String(r.kategori || '');
         const katLow = kat.toLowerCase();
-        const isDihapus = katLow.includes('dihapus');
         const isTrxJual = katLow.includes('penjualan') || katLow.includes('belum lunas');
         const auditEdit = ekstrakAuditEditTransaksi(r);
         const pendingItem = daftarPendingTransaksi.find(pt =>
           String(pt.idTransaksi) === String(r.id) && String(pt.status || '').toLowerCase().includes('menunggu')
         );
 
+        const riwayatBayarHtml = (piutangNota && Array.isArray(piutangNota.riwayatBayar) && piutangNota.riwayatBayar.length)
+          ? piutangNota.riwayatBayar.map(rb => {
+              const pelaku = rb.dilunasiOleh || rb.dibayarOleh || '-';
+              const teks = rb.tipe === 'Pelunasan'
+                ? `Dilunasi oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`
+                : `${escapeHtmlStr(rb.tipe || 'Cicilan')} ${formatRupiah(rb.nominal)} oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`;
+              return `<div class="text-[10px] font-bold text-emerald-700 mt-0.5">💳 ${teks}</div>`;
+            }).join('')
+          : '';
+
         let badgeClass = 'bg-slate-100 text-slate-700';
-        if (katLow.includes('penjualan') || katLow.includes('pelunasan')) badgeClass = 'bg-emerald-100 text-emerald-800';
+        if (katLow.includes('penjualan') || katLow.includes('pelunasan') || katLow.includes('cicilan piutang')) badgeClass = 'bg-emerald-100 text-emerald-800';
         else if (katLow.includes('belum lunas')) badgeClass = 'bg-amber-100 text-amber-800';
         else if (katLow.includes('keperluan') || katLow.includes('pembelian')) badgeClass = 'bg-rose-100 text-rose-700';
         else if (isDihapus) badgeClass = 'bg-rose-200 text-rose-900';
@@ -4058,6 +4191,7 @@
             </td>
             <td class="py-2.5 px-3">
               <span class="px-2 py-0.5 rounded-full text-[10.5px] font-extrabold ${badgeClass}">${escapeHtmlStr(kat)}</span>
+              ${piutangNota && sisaAktual > 0 ? `<div class="text-[10px] font-extrabold text-amber-800 mt-0.5">Terbayar: ${formatRupiah(sudahAktual)} | Sisa: ${formatRupiah(sisaAktual)}</div>` : ''}
               ${pendingItem ? `<div class="text-[10px] font-extrabold text-amber-700 mt-0.5">⏳ Menunggu ACC ${pendingItem.tipeAksi}</div>` : ''}
             </td>
             <td class="py-2.5 px-3">
@@ -4067,6 +4201,7 @@
             <td class="py-2.5 px-3 max-w-[280px]">
               <div class="font-semibold text-slate-800">${escapeHtmlStr(r.keterangan || '-')}</div>
               ${r.detailInfo ? `<div class="text-[10.5px] text-slate-500 mt-0.5">${escapeHtmlStr(r.detailInfo)}</div>` : ''}
+              ${riwayatBayarHtml}
             </td>
             <td class="py-2.5 px-3 text-right font-mono font-extrabold text-slate-900">${formatRupiah(r.nominal)}</td>
             <td class="py-2.5 px-3 text-center whitespace-nowrap space-x-1">
@@ -4367,16 +4502,18 @@
       const q = (document.getElementById('cariPiutang')?.value || '').trim().toLowerCase();
       const statusFilter = document.getElementById('filterStatusPiutang')?.value || 'belum';
 
-      const semuaUser = daftarPiutangAll.filter(p => cocokDenganUserLogin(p.kasir));
+      // Semua role (Kasir, Manager, Owner) dapat melihat seluruh transaksi DP / Piutang dari siapa pun
+      const semuaData = daftarPiutangAll;
       let totalSisa = 0;
       let jmlBelum = 0;
       let jmlTempo = 0;
       const hariIni = getHariIniISO();
 
-      semuaUser.forEach(p => {
-        const belum = String(p.status || '').toLowerCase() !== 'lunas';
+      semuaData.forEach(p => {
+        const sisa = Number(p.sisaTagihan || 0);
+        const belum = sisa > 0 && String(p.status || '').toLowerCase() !== 'lunas';
         if (belum) {
-          totalSisa += Number(p.sisaTagihan || 0);
+          totalSisa += sisa;
           jmlBelum += 1;
           const tempoISO = tanggalKeISO(p.jatuhTempo);
           if (tempoISO && tempoISO <= hariIni) jmlTempo += 1;
@@ -4387,11 +4524,12 @@
       if (document.getElementById('piutangJmlBelum')) document.getElementById('piutangJmlBelum').innerText = `${jmlBelum} Transaksi`;
       if (document.getElementById('piutangJmlTempo')) document.getElementById('piutangJmlTempo').innerText = `${jmlTempo} Tagihan`;
 
-      const filtered = semuaUser.filter(p => {
-        const st = String(p.status || '').toLowerCase();
-        if (statusFilter === 'belum' && st === 'lunas') return false;
-        if (statusFilter === 'lunas' && st !== 'lunas') return false;
-        if (q && !`${p.id} ${p.pelanggan} ${p.noHp}`.toLowerCase().includes(q)) return false;
+      const filtered = semuaData.filter(p => {
+        const sisa = Number(p.sisaTagihan || 0);
+        const isLunas = sisa <= 0 || String(p.status || '').toLowerCase() === 'lunas';
+        if (statusFilter === 'belum' && isLunas) return false;
+        if (statusFilter === 'lunas' && !isLunas) return false;
+        if (q && !`${p.id} ${p.pelanggan} ${p.noHp} ${p.kasir}`.toLowerCase().includes(q)) return false;
         return true;
       });
 
@@ -4401,7 +4539,21 @@
       }
 
       tbody.innerHTML = filtered.map(p => {
-        const isLunas = String(p.status || '').toLowerCase() === 'lunas';
+        const sisa = Number(p.sisaTagihan || 0);
+        const isLunas = sisa <= 0 || String(p.status || '').toLowerCase() === 'lunas';
+        const riwayatList = Array.isArray(p.riwayatBayar) ? p.riwayatBayar : [];
+        const riwayatHtml = riwayatList.length
+          ? `<div class="mt-1 pt-1 border-t border-slate-100 space-y-0.5">
+              ${riwayatList.map(rb => {
+                const pelaku = rb.dilunasiOleh || rb.dibayarOleh || '-';
+                const teks = rb.tipe === 'Pelunasan'
+                  ? `Dilunasi oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`
+                  : `${escapeHtmlStr(rb.tipe || 'Cicilan')} ${formatRupiah(rb.nominal)} oleh ${escapeHtmlStr(pelaku)} (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}`;
+                return `<div class="text-[10px] font-semibold text-emerald-700 leading-tight">• ${teks}</div>`;
+              }).join('')}
+            </div>`
+          : '';
+
         return `
           <tr class="hover:bg-slate-50">
             <td class="py-2.5 px-3">
@@ -4412,47 +4564,174 @@
               <div class="font-bold text-slate-900">${escapeHtmlStr(p.pelanggan)}</div>
               <div class="text-[10px] text-slate-500">${escapeHtmlStr(p.noHp || '-')}</div>
             </td>
-            <td class="py-2.5 px-3 text-[11px]">
-              <div>Buat: <strong>${escapeHtmlStr(p.kasir)}</strong></div>
-              <div>Lunas: <strong>${escapeHtmlStr(p.pelunas || '-')}</strong></div>
+            <td class="py-2.5 px-3 text-[11px] max-w-[260px]">
+              <div>Buat Nota: <strong>${escapeHtmlStr(p.kasir)}</strong></div>
+              <div>Terakhir Bayar/Lunas: <strong>${escapeHtmlStr(p.pelunas || '-')}</strong></div>
+              ${riwayatHtml}
             </td>
             <td class="py-2.5 px-3 font-bold text-amber-700">${formatTanggalIndo(p.jatuhTempo)}</td>
             <td class="py-2.5 px-3 text-right font-mono">
               <div class="font-bold">${formatRupiah(p.total)}</div>
-              <div class="text-[10px] text-emerald-700">DP: ${formatRupiah(p.sudahBayar)}</div>
+              <div class="text-[10px] text-emerald-700">Terbayar: ${formatRupiah(p.sudahBayar)}</div>
             </td>
-            <td class="py-2.5 px-3 text-right font-mono font-extrabold ${isLunas ? 'text-emerald-600' : 'text-rose-600'}">${formatRupiah(p.sisaTagihan)}</td>
+            <td class="py-2.5 px-3 text-right font-mono font-extrabold ${isLunas ? 'text-emerald-600' : 'text-rose-600'}">${formatRupiah(sisa)}</td>
             <td class="py-2.5 px-3 text-center">
               ${isLunas
                 ? '<span class="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10.5px] font-extrabold">Lunas</span>'
-                : `<button type="button" onclick="bukaModalPelunasanDP('${p.id}')" class="px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-extrabold shadow-sm">Bayar / Lunasi</button>`}
+                : `<button type="button" onclick="bukaModalPelunasanDP('${p.id}')" class="px-2.5 py-1 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-[11px] font-extrabold shadow-sm">Bayar / Cicil</button>`}
             </td>
           </tr>
         `;
       }).join('');
     }
 
+    let piutangModalAktif = null;
+
     function bukaModalPelunasanDP(idTrx) {
       const p = daftarPiutangAll.find(x => x.id === idTrx);
       if (!p) return;
+      piutangModalAktif = p;
       document.getElementById('pelunasanIdTrx').value = p.id;
       document.getElementById('pelunasanNotaLabel').innerText = p.id;
       document.getElementById('pelunasanPelangganLabel').innerText = p.pelanggan;
+      document.getElementById('pelunasanTotalLabel').innerText = formatRupiah(p.total);
+      document.getElementById('pelunasanSudahBayarLabel').innerText = formatRupiah(p.sudahBayar);
       document.getElementById('pelunasanSisaLabel').innerText = formatRupiah(p.sisaTagihan);
       document.getElementById('pelunasanNominalInput').value = p.sisaTagihan;
+      document.getElementById('pelunasanMetodeSelect').value = 'Tunai';
+
+      const boxRiw = document.getElementById('boxRiwayatCicilanModal');
+      const listRiw = document.getElementById('listRiwayatCicilanModal');
+      const riwayat = Array.isArray(p.riwayatBayar) ? p.riwayatBayar : [];
+      if (boxRiw && listRiw) {
+        if (riwayat.length) {
+          boxRiw.classList.remove('hidden');
+          listRiw.innerHTML = riwayat.map(rb => {
+            const pelaku = rb.dilunasiOleh || rb.dibayarOleh || '-';
+            return `<div>• <strong>${escapeHtmlStr(rb.tipe || 'Cicilan')}</strong> ${formatRupiah(rb.nominal)} oleh <strong>${escapeHtmlStr(pelaku)}</strong> (${escapeHtmlStr(rb.metode || 'Tunai')}) • ${normalisasiTampilanWaktu(rb.waktuBayar)}</div>`;
+          }).join('');
+        } else {
+          boxRiw.classList.add('hidden');
+        }
+      }
+
+      perbaruiPreviewStatusCicilanModal();
       bukaModal('modalPelunasanDP');
+    }
+
+    function isiNominalLunasPenuh() {
+      if (!piutangModalAktif) return;
+      document.getElementById('pelunasanNominalInput').value = Number(piutangModalAktif.sisaTagihan || 0);
+      perbaruiPreviewStatusCicilanModal();
+    }
+
+    function perbaruiPreviewStatusCicilanModal() {
+      if (!piutangModalAktif) return;
+      const box = document.getElementById('previewStatusCicilanBox');
+      if (!box) return;
+      const sisaSaatIni = Number(piutangModalAktif.sisaTagihan || 0);
+      const nom = parseFloat(document.getElementById('pelunasanNominalInput')?.value || '0') || 0;
+      const sisaSetelah = Math.max(0, sisaSaatIni - nom);
+      if (nom <= 0) {
+        box.className = 'px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-[11px] font-bold text-rose-800';
+        box.innerText = 'Masukkan nominal pembayaran lebih dari Rp 0.';
+      } else if (sisaSetelah <= 0) {
+        box.className = 'px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-[11px] font-extrabold text-emerald-800';
+        box.innerText = `✅ Status menjadi LUNAS • Sisa Tagihan: Rp 0 (Diproses oleh ${currentUser?.nama || '-'})`;
+      } else {
+        box.className = 'px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] font-extrabold text-amber-900';
+        box.innerText = `⏳ Status tetap BELUM LUNAS (Cicilan) • Sisa Tagihan: ${formatRupiah(sisaSetelah)} (Diproses oleh ${currentUser?.nama || '-'})`;
+      }
     }
 
     async function prosesSimpanPelunasanDP() {
       const idTrx = document.getElementById('pelunasanIdTrx').value;
       const nom = parseFloat(document.getElementById('pelunasanNominalInput').value || '0') || 0;
+      const metode = document.getElementById('pelunasanMetodeSelect')?.value || 'Tunai';
       if (nom <= 0) return tampilkanToast('Masukkan nominal pembayaran yang valid!', '#dc2626');
 
-      if (isCloudConnected()) {
-        await panggilBackend('bayarPelunasanPiutang', [idTrx, nom, currentUser.nama]).catch(() => {});
+      const btn = document.getElementById('btnSimpanPelunasanDP');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Menyimpan Pembayaran...';
       }
+
+      const waktuSekarang = formatWaktuWIB();
+      const pelakuNama = currentUser.nama;
+
+      if (isCloudConnected()) {
+        await panggilBackend('bayarPelunasanPiutang', [idTrx, nom, pelakuNama, metode]).catch(() => {});
+      }
+
+      const db = getSimDB();
+      const idxP = (db.piutang || []).findIndex(x => String(x.id) === String(idTrx));
+      let isLunasLokal = false;
+      let sisaBaruLokal = 0;
+      let sudahBaruLokal = nom;
+
+      if (idxP >= 0) {
+        const itemP = db.piutang[idxP];
+        const totalTagihan = Number(itemP.total || 0);
+        sudahBaruLokal = Number(itemP.sudahBayar || 0) + nom;
+        sisaBaruLokal = Math.max(0, totalTagihan - sudahBaruLokal);
+        isLunasLokal = sisaBaruLokal <= 0;
+
+        itemP.pelunas = pelakuNama;
+        itemP.sudahBayar = sudahBaruLokal;
+        itemP.sisaTagihan = sisaBaruLokal;
+        itemP.status = isLunasLokal ? 'Lunas' : 'Belum Lunas';
+        itemP.riwayatBayar = Array.isArray(itemP.riwayatBayar) ? itemP.riwayatBayar : [];
+        itemP.riwayatBayar.push({
+          tipe: isLunasLokal ? 'Pelunasan' : 'Cicilan',
+          nominal: nom,
+          metode: metode,
+          dibayarOleh: pelakuNama,
+          dilunasiOleh: isLunasLokal ? pelakuNama : '',
+          waktuBayar: waktuSekarang
+        });
+
+        const idxLapUtama = (db.laporan || []).findIndex(l => String(l.id) === String(idTrx));
+        if (idxLapUtama >= 0) {
+          const infoLama = String(db.laporan[idxLapUtama].detailInfo || '');
+          const infoClean = infoLama
+            .replace(/\s*\|\s*Status:.*$/i, '')
+            .replace(/\s*\|\s*Terbayar:.*$/i, '')
+            .replace(/\s*\|\s*Sisa:.*$/i, '');
+          const labelRiw = isLunasLokal
+            ? `Dilunasi oleh ${pelakuNama} (${metode}) • ${waktuSekarang}`
+            : `Cicilan ${formatRupiah(nom)} oleh ${pelakuNama} (${metode}) • ${waktuSekarang} | Terbayar: ${formatRupiah(sudahBaruLokal)} | Sisa: ${formatRupiah(sisaBaruLokal)}`;
+          db.laporan[idxLapUtama].kategori = isLunasLokal ? 'Penjualan (Lunas DP)' : 'Belum Lunas (DP/Cicilan)';
+          db.laporan[idxLapUtama].detailInfo = `${infoClean} | ${labelRiw}`;
+        }
+
+        db.laporan = db.laporan || [];
+        db.laporan.unshift({
+          waktu: waktuSekarang,
+          id: (isLunasLokal ? 'PL-' : 'CC-') + idTrx + '-' + Date.now().toString().slice(-3),
+          kategori: isLunasLokal ? 'Pelunasan Piutang' : 'Cicilan Piutang',
+          user: pelakuNama,
+          keterangan: isLunasLokal
+            ? `Pelunasan Nota ${idTrx} (${itemP.pelanggan}) • Dilunasi oleh ${pelakuNama}`
+            : `Cicilan Nota ${idTrx} (${itemP.pelanggan}) • Cicilan ${formatRupiah(nom)} oleh ${pelakuNama}`,
+          nominal: nom,
+          detailInfo: isLunasLokal
+            ? `Metode: ${metode} | Dilunasi oleh ${pelakuNama} • ${waktuSekarang} | Total Terbayar: ${formatRupiah(sudahBaruLokal)} | Sisa: Rp 0 (Lunas)`
+            : `Metode: ${metode} | Cicilan ${formatRupiah(nom)} oleh ${pelakuNama} • ${waktuSekarang} | Total Terbayar: ${formatRupiah(sudahBaruLokal)} | Sisa: ${formatRupiah(sisaBaruLokal)}`
+        });
+        saveSimDB(db);
+      }
+
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '💾 Simpan Pembayaran';
+      }
+
       tutupModal('modalPelunasanDP');
-      tampilkanToast('Pembayaran piutang berhasil dicatat!');
+      tampilkanToast(
+        isLunasLokal
+          ? `Nota ${idTrx} LUNAS diproses oleh ${pelakuNama}!`
+          : `Cicilan ${formatRupiah(nom)} oleh ${pelakuNama} disimpan! Sisa: ${formatRupiah(sisaBaruLokal)}`
+      );
       await muatSemuaDataAwal(false);
     }
 
