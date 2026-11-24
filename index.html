@@ -13,6 +13,7 @@
   <title>POS Kasir Multi-User & Cloud Sync</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
@@ -1044,6 +1045,76 @@
             </table>
           </div>
         </div>
+
+        <!-- PANEL ARSIP & TUTUP BUKU TAHUNAN (KHUSUS OWNER & MANAGER) -->
+        <div id="panelArsipTutupBuku" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-4 space-y-4">
+          <div class="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <h2 class="text-base font-extrabold text-slate-900">🗄️ Arsip & Tutup Buku Tahunan</h2>
+                <span class="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-[10px] font-extrabold uppercase">Owner & Manager</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-0.5">Ekspor seluruh data transaksi periode terpilih ke file Excel (.xlsx) sebelum membersihkan riwayat lunas. Stok barang & piutang DP belum lunas tetap dipertahankan.</p>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-xl border border-slate-200">
+              <label for="selectTahunArsip" class="text-xs font-extrabold text-slate-700 whitespace-nowrap">Tahun Arsip:</label>
+              <select id="selectTahunArsip" onchange="ubahTahunArsipTerpilih()"
+                class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-extrabold text-brand-700 outline-none focus:border-brand-600">
+              </select>
+            </div>
+          </div>
+
+          <!-- STATISTIK PRATINJAU SEBELUM ARSIP -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="bg-rose-50/70 border border-rose-200 rounded-xl p-3">
+              <div class="text-[11px] font-bold text-rose-800">Transaksi Lunas (<span class="lbl-tahun-arsip">-</span>)</div>
+              <div id="statArsipLunas" class="text-lg font-extrabold text-rose-700 mt-0.5">0 Transaksi</div>
+              <div class="text-[10.5px] text-rose-600 mt-0.5">Akan diarsipkan &amp; dibersihkan dari DB aktif</div>
+            </div>
+            <div class="bg-amber-50/80 border border-amber-200 rounded-xl p-3">
+              <div class="text-[11px] font-bold text-amber-900">DP / Jatuh Tempo Belum Lunas (<span class="lbl-tahun-arsip">-</span>)</div>
+              <div id="statArsipBelumLunas" class="text-lg font-extrabold text-amber-800 mt-0.5">0 Transaksi</div>
+              <div class="text-[10.5px] text-amber-700 mt-0.5">TETAP DIPERTAHANKAN aktif untuk pelunasan</div>
+            </div>
+            <div class="bg-emerald-50/80 border border-emerald-200 rounded-xl p-3">
+              <div class="text-[11px] font-bold text-emerald-900">Master Produk &amp; Stok Terakhir</div>
+              <div id="statArsipMasterProduk" class="text-lg font-extrabold text-emerald-700 mt-0.5">0 Produk</div>
+              <div class="text-[10.5px] text-emerald-700 mt-0.5">TETAP DIPERTAHANKAN utuh (tidak di-reset)</div>
+            </div>
+          </div>
+
+          <!-- LANGKAH 1 & LANGKAH 2 -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between gap-3">
+              <div>
+                <div class="text-xs font-extrabold text-slate-900">Langkah 1 — Cadangkan &amp; Unduh File Arsip</div>
+                <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Mengunduh rekap Excel multi-sheet (<code class="font-mono text-[10.5px] bg-white px-1 py-0.5 rounded border">ARSIP_POS_[TAHUN]_[TANGGAL].xlsx</code>) berisi seluruh transaksi, detail item, riwayat cicilan/pelunasan, log stok/koreksi, keperluan toko, dan snapshot stok terakhir.
+                </p>
+              </div>
+              <button type="button" id="btnUnduhArsipTahunan" onclick="unduhFileArsipTahunan()"
+                class="w-full py-2.5 px-4 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-extrabold shadow transition flex items-center justify-center gap-2">
+                <span>📥</span> 1. Unduh File Arsip Lengkap (.xlsx)
+              </button>
+            </div>
+
+            <div class="bg-rose-50/40 border border-rose-200 rounded-xl p-3.5 flex flex-col justify-between gap-3">
+              <div>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-extrabold text-rose-950">Langkah 2 — Pembersihan Data Terarsip</span>
+                  <span id="badgeStatusUnduhArsip" class="px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-extrabold">Wajib Unduh Dulu</span>
+                </div>
+                <p class="text-[11px] text-slate-600 mt-1 leading-relaxed">
+                  Menghapus transaksi lunas &amp; log tahun terpilih agar aplikasi tetap ringan. Stok akhir, akun user, pengaturan toko, dan piutang DP belum lunas tetap aman.
+                </p>
+              </div>
+              <button type="button" id="btnBersihkanTutupBuku" onclick="bukaModalKonfirmasiTutupBuku()" disabled
+                class="w-full py-2.5 px-4 rounded-xl bg-slate-300 text-slate-500 cursor-not-allowed text-xs font-extrabold transition flex items-center justify-center gap-2">
+                <span>🧹</span> 2. Bersihkan Data Terarsip (Tutup Buku)
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
     </main>
@@ -1774,6 +1845,40 @@
     </div>
   </div>
 
+  <!-- MODAL 15: KONFIRMASI GANDA TUTUP BUKU TAHUNAN -->
+  <div id="modalKonfirmasiTutupBuku" class="fixed inset-0 z-[70] hidden bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl border border-slate-200">
+      <div class="px-4 py-3 bg-rose-700 text-white flex items-center justify-between">
+        <h3 class="text-sm font-extrabold">⚠️ Konfirmasi Tutup Buku Tahunan</h3>
+        <button type="button" onclick="tutupModal('modalKonfirmasiTutupBuku')" class="text-rose-100 hover:text-white font-bold text-sm">✕</button>
+      </div>
+      <div class="p-4 space-y-3">
+        <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-950 space-y-1">
+          <div class="font-extrabold">Ringkasan Tindakan Tahun <span id="modalTutupBukuTahunLabel">-</span>:</div>
+          <ul class="list-disc pl-4 space-y-0.5 text-[11px]">
+            <li><strong>Dihapus dari DB aktif:</strong> <span id="modalTutupBukuJmlHapus">0</span> transaksi lunas &amp; log riwayat tahun <span class="lbl-tahun-arsip">-</span>.</li>
+            <li><strong>Dipertahankan utuh:</strong> Seluruh Master Produk, Stok Terakhir, User, Identitas Toko, dan <span id="modalTutupBukuJmlDP">0</span> transaksi DP Belum Lunas.</li>
+          </ul>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1">
+            Ketik <code class="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 font-mono font-extrabold">TUTUP BUKU</code> untuk melanjutkan *
+          </label>
+          <input type="text" id="inputKonfirmasiTutupBuku" autocomplete="off"
+            onkeydown="if(event.key==='Enter') eksekusiTutupBukuTahunan()"
+            placeholder="Ketik TUTUP BUKU..."
+            class="w-full px-3 py-2 rounded-xl border border-slate-300 font-mono text-xs font-extrabold uppercase outline-none focus:border-rose-600" />
+        </div>
+        <div class="flex justify-end gap-2 pt-1">
+          <button type="button" onclick="tutupModal('modalKonfirmasiTutupBuku')" class="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold">Batal</button>
+          <button type="button" id="btnEksekusiTutupBuku" onclick="eksekusiTutupBukuTahunan()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow">
+            🧹 Jalankan Tutup Buku
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL 14: EDIT RIWAYAT TRANSAKSI & PENYESUAIAN STOK -->
   <div id="modalEditTransaksi" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
@@ -2319,6 +2424,11 @@
         panelAkun.classList.toggle('hidden', isKasir);
       }
 
+      const panelArsip = document.getElementById('panelArsipTutupBuku');
+      if (panelArsip) {
+        panelArsip.classList.toggle('hidden', isKasir);
+      }
+
       const selRoleBaru = document.getElementById('akunRoleBaru');
       if (selRoleBaru) {
         if (isOwner) {
@@ -2529,7 +2639,7 @@
       if (namaTab === 'koreksi') { isiDropdownProdukKoreksi(); renderTabelRiwayatKoreksi(); fokusInputBarcodeAktif(); }
       if (namaTab === 'keperluan') { ubahJenisKeperluan(); isiDropdownProdukKeperluan(); muatKeperluanToko(); }
       if (namaTab === 'laporan') { muatLaporanLengkap(); muatPendingTransaksi(); }
-      if (namaTab === 'pengaturan') { terapkanHakAksesRoleKeUI(); muatDaftarAkun(); }
+      if (namaTab === 'pengaturan') { terapkanHakAksesRoleKeUI(); muatDaftarAkun(); inisialisasiPanelArsipTahunan(); }
     }
 
     // =========================================================================
@@ -5838,6 +5948,458 @@
         tampilkanToast(res?.pesan || 'Akun dihapus!');
       }
       await muatDaftarAkun();
+    }
+
+    // =========================================================================
+    // 15B. ARSIP & TUTUP BUKU TAHUNAN (OWNER & MANAGER)
+    // =========================================================================
+    let tahunArsipSudahDiunduh = '';
+
+    function ekstrakTahunDariWaktu(val) {
+      const iso = tanggalKeISO(val);
+      if (iso && iso.length >= 4) return iso.slice(0, 4);
+      const s = String(val || '');
+      const m = s.match(/\b(20\d{2})\b/);
+      return m ? m[1] : '';
+    }
+
+    function inisialisasiPanelArsipTahunan() {
+      if (isUserKasirAktif()) return;
+      const sel = document.getElementById('selectTahunArsip');
+      if (!sel) return;
+
+      const tahunSet = new Set();
+      const tahunSekarang = String(new Date().getFullYear());
+      tahunSet.add(tahunSekarang);
+      tahunSet.add(String(Number(tahunSekarang) - 1));
+
+      dataLaporanSemua.forEach(r => {
+        const thn = ekstrakTahunDariWaktu(r.waktu);
+        if (thn) tahunSet.add(thn);
+      });
+      daftarPiutangAll.forEach(p => {
+        const thn = ekstrakTahunDariWaktu(p.waktu);
+        if (thn) tahunSet.add(thn);
+      });
+
+      const prevVal = sel.value;
+      const daftarTahun = Array.from(tahunSet).sort((a, b) => Number(b) - Number(a));
+      sel.innerHTML = daftarTahun.map(t => `<option value="${t}">Tahun ${t}</option>`).join('');
+
+      if (prevVal && daftarTahun.includes(prevVal)) {
+        sel.value = prevVal;
+      } else {
+        const thnLalu = String(Number(tahunSekarang) - 1);
+        sel.value = daftarTahun.includes(thnLalu) ? thnLalu : daftarTahun[0];
+      }
+
+      perbaruiStatistikArsipTahunan();
+    }
+
+    function ubahTahunArsipTerpilih() {
+      tahunArsipSudahDiunduh = '';
+      perbaruiStatusTombolTutupBuku();
+      perbaruiStatistikArsipTahunan();
+    }
+
+    function getRingkasanDataArsipTahun(tahunStr) {
+      const idPiutangBelumLunasSet = new Set();
+      const piutangTahunIni = [];
+      const piutangBelumLunasTahunIni = [];
+      const piutangLunasTahunIni = [];
+
+      daftarPiutangAll.forEach(p => {
+        const sisa = Number(p.sisaTagihan || 0);
+        const isLunas = sisa <= 0 || String(p.status || '').toLowerCase() === 'lunas';
+        if (!isLunas && p.id) idPiutangBelumLunasSet.add(String(p.id).trim());
+
+        const thn = ekstrakTahunDariWaktu(p.waktu);
+        if (thn === tahunStr) {
+          piutangTahunIni.push(p);
+          if (isLunas) piutangLunasTahunIni.push(p);
+          else piutangBelumLunasTahunIni.push(p);
+        }
+      });
+
+      const laporanTahunIni = [];
+      const laporanLunasDihapus = [];
+      const laporanBelumLunasDipertahankan = [];
+
+      dataLaporanSemua.forEach(r => {
+        const thn = ekstrakTahunDariWaktu(r.waktu);
+        if (thn !== tahunStr) return;
+        laporanTahunIni.push(r);
+
+        const idTrx = String(r.id || '').trim();
+        const idInduk = idTrx.replace(/^(PL|CC)-/i, '').replace(/-\d{3}$/, '');
+        const kat = String(r.kategori || '').toLowerCase();
+        const masihBelumLunas = idPiutangBelumLunasSet.has(idTrx) || (idInduk && idPiutangBelumLunasSet.has(idInduk)) || (kat.includes('belum lunas') && !idTrx);
+
+        if (masihBelumLunas) laporanBelumLunasDipertahankan.push(r);
+        else laporanLunasDihapus.push(r);
+      });
+
+      const keperluanTahunIni = daftarKeperluanToko.filter(k => ekstrakTahunDariWaktu(k.waktu) === tahunStr);
+      const pendingStokTahunIni = daftarPendingStok.filter(s => ekstrakTahunDariWaktu(s.waktu) === tahunStr);
+      const riwayatDigitalTahunIni = daftarRiwayatDigital.filter(d => ekstrakTahunDariWaktu(d.waktu) === tahunStr);
+
+      return {
+        tahunStr,
+        laporanTahunIni,
+        laporanLunasDihapus,
+        laporanBelumLunasDipertahankan,
+        piutangTahunIni,
+        piutangBelumLunasTahunIni,
+        piutangLunasTahunIni,
+        keperluanTahunIni,
+        pendingStokTahunIni,
+        riwayatDigitalTahunIni
+      };
+    }
+
+    function perbaruiStatistikArsipTahunan() {
+      const tahunStr = document.getElementById('selectTahunArsip')?.value || String(new Date().getFullYear());
+      document.querySelectorAll('.lbl-tahun-arsip').forEach(el => { el.innerText = tahunStr; });
+
+      const ringkasan = getRingkasanDataArsipTahun(tahunStr);
+      if (document.getElementById('statArsipLunas')) {
+        document.getElementById('statArsipLunas').innerText = `${ringkasan.laporanLunasDihapus.length} Data`;
+      }
+      if (document.getElementById('statArsipBelumLunas')) {
+        document.getElementById('statArsipBelumLunas').innerText = `${ringkasan.piutangBelumLunasTahunIni.length} Nota`;
+      }
+      if (document.getElementById('statArsipMasterProduk')) {
+        document.getElementById('statArsipMasterProduk').innerText = `${daftarProduk.length} Produk`;
+      }
+      perbaruiStatusTombolTutupBuku();
+    }
+
+    function perbaruiStatusTombolTutupBuku() {
+      const tahunStr = document.getElementById('selectTahunArsip')?.value || '';
+      const btn = document.getElementById('btnBersihkanTutupBuku');
+      const badge = document.getElementById('badgeStatusUnduhArsip');
+      if (!btn || !badge) return;
+
+      const sudahUnduh = Boolean(tahunStr && tahunArsipSudahDiunduh === tahunStr);
+      btn.disabled = !sudahUnduh;
+      if (sudahUnduh) {
+        btn.className = 'w-full py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-extrabold shadow transition flex items-center justify-center gap-2 cursor-pointer';
+        badge.className = 'px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-extrabold';
+        badge.innerText = '✔ Arsip Siap';
+      } else {
+        btn.className = 'w-full py-2.5 px-4 rounded-xl bg-slate-300 text-slate-500 cursor-not-allowed text-xs font-extrabold transition flex items-center justify-center gap-2';
+        badge.className = 'px-2 py-0.5 rounded-full bg-slate-200 text-slate-600 text-[10px] font-extrabold';
+        badge.innerText = 'Wajib Unduh Dulu';
+      }
+    }
+
+    function unduhFileArsipTahunan() {
+      if (isUserKasirAktif()) return tampilkanToast('Akses ditolak.', '#dc2626');
+      const tahunStr = document.getElementById('selectTahunArsip')?.value || String(new Date().getFullYear());
+      const ringkasan = getRingkasanDataArsipTahun(tahunStr);
+      const tglUnduh = getHariIniISO().replace(/-/g, '');
+      const namaFileBase = `ARSIP_POS_${tahunStr}_${tglUnduh}`;
+
+      // Bangun data terstruktur per kategori sheet
+      const sheetRingkasan = [
+        { Keterangan: 'Nama Toko', Nilai: infoToko.namaToko || 'POS KASIR' },
+        { Keterangan: 'Alamat Toko', Nilai: String(infoToko.alamatToko || '').replace(/\n/g, ' | ') },
+        { Keterangan: 'Tahun Arsip', Nilai: tahunStr },
+        { Keterangan: 'Tanggal & Waktu Unduh', Nilai: formatWaktuWIB() },
+        { Keterangan: 'Diunduh Oleh', Nilai: `${currentUser?.nama || '-'} (${currentUser?.role || '-'})` },
+        { Keterangan: 'Total Aktivitas & Transaksi Tahun Ini', Nilai: ringkasan.laporanTahunIni.length },
+        { Keterangan: 'Transaksi Lunas (Siap Dibersihkan)', Nilai: ringkasan.laporanLunasDihapus.length },
+        { Keterangan: 'DP / Jatuh Tempo Belum Lunas (Dipertahankan)', Nilai: ringkasan.piutangBelumLunasTahunIni.length },
+        { Keterangan: 'Total Master Produk (Dipertahankan)', Nilai: daftarProduk.length }
+      ];
+
+      const sheetTransaksi = ringkasan.laporanTahunIni.map(r => ({
+        Waktu: normalisasiTampilanWaktu(r.waktu),
+        ID_Nota: r.id,
+        Kategori: r.kategori,
+        Petugas: r.user,
+        Keterangan_Item: r.keterangan,
+        Nominal: Number(r.nominal || 0),
+        Detail_Info: r.detailInfo || '',
+        Diedit_Oleh: r.dieditOleh || '-',
+        Diverifikasi_Oleh: r.diverifikasiOleh || '-'
+      }));
+
+      const sheetDetailItem = [];
+      ringkasan.laporanTahunIni.forEach(r => {
+        const items = parseItemsDariKeteranganLaporan(r.keterangan);
+        if (items.length) {
+          items.forEach(it => {
+            sheetDetailItem.push({
+              Waktu: normalisasiTampilanWaktu(r.waktu),
+              ID_Nota: r.id,
+              Kategori: r.kategori,
+              Petugas: r.user,
+              Kode_Produk: it.kode || '-',
+              Nama_Barang_Jasa: it.nama,
+              Qty: Number(it.qty || 0),
+              Satuan: it.satuanNama || 'Unit',
+              Harga_Satuan: Number(it.harga || 0),
+              Subtotal: Number(it.qty || 0) * Number(it.harga || 0)
+            });
+          });
+        }
+      });
+
+      const sheetPiutangCicilan = [];
+      ringkasan.piutangTahunIni.forEach(p => {
+        const riw = Array.isArray(p.riwayatBayar) ? p.riwayatBayar : [];
+        if (riw.length) {
+          riw.forEach((rb, idx) => {
+            sheetPiutangCicilan.push({
+              ID_Nota: p.id,
+              Tanggal_Nota: normalisasiTampilanWaktu(p.waktu),
+              Pelanggan: p.pelanggan,
+              No_HP: p.noHp || '-',
+              Jatuh_Tempo: p.jatuhTempo,
+              Total_Tagihan: Number(p.total || 0),
+              Sisa_Tagihan_Akhir: Number(p.sisaTagihan || 0),
+              Status_Nota: p.status,
+              Pembayaran_Ke: idx + 1,
+              Tipe_Bayar: rb.tipe || 'Cicilan',
+              Nominal_Bayar: Number(rb.nominal || 0),
+              Metode: rb.metode || 'Tunai',
+              Petugas_Penerima: rb.dilunasiOleh || rb.dibayarOleh || '-',
+              Waktu_Bayar: normalisasiTampilanWaktu(rb.waktuBayar)
+            });
+          });
+        } else {
+          sheetPiutangCicilan.push({
+            ID_Nota: p.id,
+            Tanggal_Nota: normalisasiTampilanWaktu(p.waktu),
+            Pelanggan: p.pelanggan,
+            No_HP: p.noHp || '-',
+            Jatuh_Tempo: p.jatuhTempo,
+            Total_Tagihan: Number(p.total || 0),
+            Sisa_Tagihan_Akhir: Number(p.sisaTagihan || 0),
+            Status_Nota: p.status,
+            Pembayaran_Ke: 0,
+            Tipe_Bayar: '-',
+            Nominal_Bayar: Number(p.sudahBayar || 0),
+            Metode: '-',
+            Petugas_Penerima: p.kasir || '-',
+            Waktu_Bayar: normalisasiTampilanWaktu(p.waktu)
+          });
+        }
+      });
+
+      const sheetKeperluanLog = [
+        ...ringkasan.keperluanTahunIni.map(k => ({
+          Sumber_Log: 'Keperluan Toko',
+          ID: k.id,
+          Waktu: normalisasiTampilanWaktu(k.waktu),
+          Petugas: k.user,
+          Jenis: k.jenis,
+          Item_Keterangan: `${k.namaItem ? k.namaItem + ' - ' : ''}${k.keterangan}`,
+          Nilai_Qty: k.nilaiText,
+          Nominal: Number(k.nominal || 0),
+          Status: k.status,
+          Verifikator: k.verifikator || '-'
+        })),
+        ...ringkasan.pendingStokTahunIni.map(s => ({
+          Sumber_Log: 'Log & Koreksi Stok',
+          ID: s.id,
+          Waktu: normalisasiTampilanWaktu(s.waktu),
+          Petugas: s.user,
+          Jenis: s.tipe,
+          Item_Keterangan: `${s.kode} - ${s.nama}`,
+          Nilai_Qty: s.jumlahText,
+          Nominal: Number(s.hargaBeli || 0),
+          Status: s.status,
+          Verifikator: s.verifikator || '-'
+        })),
+        ...ringkasan.riwayatDigitalTahunIni.map(d => ({
+          Sumber_Log: 'Mutasi Saldo Digital',
+          ID: '-',
+          Waktu: normalisasiTampilanWaktu(d.waktu),
+          Petugas: d.user,
+          Jenis: `${d.sumberDana} (${d.tipe})`,
+          Item_Keterangan: d.keterangan,
+          Nilai_Qty: '-',
+          Nominal: Number(d.nominal || 0),
+          Status: 'Tercatat',
+          Verifikator: '-'
+        }))
+      ];
+
+      const sheetSnapshotStok = daftarProduk.map(p => {
+        const isJasa = String(p.jenis || '').toLowerCase().includes('jasa');
+        const stok = isJasa ? 0 : Number(p.stok || 0);
+        const hBeli = Number(p.hargaBeli || 0);
+        return {
+          Kode: p.kode,
+          Barcode: p.barcode || '-',
+          Nama_Produk: p.nama,
+          Kategori_Jenis: p.jenis,
+          Satuan_Dasar: getSatuanDasarProduk(p),
+          Harga_Beli: hBeli,
+          Harga_Jual: Number(p.harga || 0),
+          Stok_Akhir_Tutup_Buku: isJasa ? 'Jasa' : stok,
+          Valuasi_Modal_Stok: isJasa ? 0 : (stok * hBeli),
+          Last_Update: normalisasiTampilanWaktu(p.lastUpdate)
+        };
+      });
+
+      if (window.XLSX) {
+        const wb = window.XLSX.utils.book_new();
+        const tambahkanSheet = (dataArr, namaSheet, fallbackKolom) => {
+          const rows = dataArr.length ? dataArr : [fallbackKolom];
+          const ws = window.XLSX.utils.json_to_sheet(rows);
+          window.XLSX.utils.book_append_sheet(wb, ws, namaSheet);
+        };
+
+        tambahkanSheet(sheetRingkasan, '1_Ringkasan_Arsip', { Info: 'Tidak ada data' });
+        tambahkanSheet(sheetTransaksi, '2_Riwayat_Transaksi', { Info: `Tidak ada transaksi pada tahun ${tahunStr}` });
+        tambahkanSheet(sheetDetailItem, '3_Detail_Item_Terjual', { Info: `Tidak ada detail item pada tahun ${tahunStr}` });
+        tambahkanSheet(sheetPiutangCicilan, '4_Piutang_dan_Cicilan', { Info: `Tidak ada data piutang pada tahun ${tahunStr}` });
+        tambahkanSheet(sheetKeperluanLog, '5_Log_Stok_dan_Keperluan', { Info: `Tidak ada log stok/keperluan pada tahun ${tahunStr}` });
+        tambahkanSheet(sheetSnapshotStok, '6_Snapshot_Stok_Produk', { Info: 'Belum ada produk terdaftar' });
+
+        window.XLSX.writeFile(wb, `${namaFileBase}.xlsx`);
+      } else {
+        // Fallback CSV terstruktur multi-bagian jika CDN XLSX terblokir offline
+        const keCSV = (judul, arr) => {
+          if (!arr.length) return `=== ${judul} ===\nTidak ada data\n\n`;
+          const headers = Object.keys(arr[0]);
+          const lines = [
+            `=== ${judul} ===`,
+            headers.join(','),
+            ...arr.map(obj => headers.map(h => `"${String(obj[h] ?? '').replace(/"/g, '""')}"`).join(','))
+          ];
+          return lines.join('\n') + '\n\n';
+        };
+        const csvGabungan =
+          keCSV('RINGKASAN ARSIP', sheetRingkasan) +
+          keCSV('RIWAYAT TRANSAKSI', sheetTransaksi) +
+          keCSV('DETAIL ITEM TERJUAL', sheetDetailItem) +
+          keCSV('PIUTANG & CICILAN', sheetPiutangCicilan) +
+          keCSV('LOG STOK & KEPERLUAN', sheetKeperluanLog) +
+          keCSV('SNAPSHOT STOK PRODUK', sheetSnapshotStok);
+
+        const blob = new Blob(['\uFEFF' + csvGabungan], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${namaFileBase}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      tahunArsipSudahDiunduh = tahunStr;
+      perbaruiStatusTombolTutupBuku();
+      tampilkanToast(`File arsip ${namaFileBase}.xlsx berhasil diunduh! Langkah 2 sekarang aktif.`);
+    }
+
+    function bukaModalKonfirmasiTutupBuku() {
+      if (isUserKasirAktif()) return tampilkanToast('Akses ditolak.', '#dc2626');
+      const tahunStr = document.getElementById('selectTahunArsip')?.value || '';
+      if (!tahunStr || tahunArsipSudahDiunduh !== tahunStr) {
+        return tampilkanToast('Silakan unduh file arsip terlebih dahulu pada Langkah 1!', '#d97706');
+      }
+
+      const ringkasan = getRingkasanDataArsipTahun(tahunStr);
+      document.getElementById('modalTutupBukuTahunLabel').innerText = tahunStr;
+      document.getElementById('modalTutupBukuJmlHapus').innerText = ringkasan.laporanLunasDihapus.length;
+      document.getElementById('modalTutupBukuJmlDP').innerText = ringkasan.piutangBelumLunasTahunIni.length;
+      document.getElementById('inputKonfirmasiTutupBuku').value = '';
+      bukaModal('modalKonfirmasiTutupBuku');
+      setTimeout(() => document.getElementById('inputKonfirmasiTutupBuku')?.focus(), 100);
+    }
+
+    async function eksekusiTutupBukuTahunan() {
+      if (isUserKasirAktif()) return tampilkanToast('Akses ditolak.', '#dc2626');
+      const tahunStr = document.getElementById('selectTahunArsip')?.value || '';
+      const kataKonfirmasi = (document.getElementById('inputKonfirmasiTutupBuku')?.value || '').trim().toUpperCase();
+
+      if (kataKonfirmasi !== 'TUTUP BUKU') {
+        return tampilkanToast('Ketik kata kunci TUTUP BUKU dengan benar untuk melanjutkan!', '#dc2626');
+      }
+
+      const btn = document.getElementById('btnEksekusiTutupBuku');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Memproses Tutup Buku...';
+      }
+
+      let pesanHasil = `Tutup buku tahun ${tahunStr} selesai!`;
+      if (isCloudConnected()) {
+        try {
+          const res = await panggilBackend('archiveAndResetYear', [tahunStr, currentUser.nama, currentUser.role]);
+          if (res && res.status === 'gagal') {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerText = '🧹 Jalankan Tutup Buku';
+            }
+            return tampilkanToast(res.pesan || 'Gagal memproses tutup buku.', '#dc2626');
+          }
+          if (res && res.pesan) pesanHasil = res.pesan;
+        } catch (e) {
+          tampilkanToast('Sinkronisasi Cloud tertunda, membersihkan data lokal...', '#d97706');
+        }
+      }
+
+      // Pembersihan selektif pada state & database lokal (mempertahankan Produk, Stok Akhir, Users, Pengaturan Toko, & DP Belum Lunas)
+      const db = getSimDB();
+      const idPiutangAktifSet = new Set();
+      (db.piutang || []).forEach(p => {
+        const sisa = Number(p.sisaTagihan || 0);
+        const isLunas = sisa <= 0 || String(p.status || '').toLowerCase() === 'lunas';
+        if (!isLunas && p.id) idPiutangAktifSet.add(String(p.id).trim());
+      });
+
+      db.laporan = (db.laporan || []).filter(r => {
+        if (ekstrakTahunDariWaktu(r.waktu) !== tahunStr) return true;
+        const idTrx = String(r.id || '').trim();
+        const idInduk = idTrx.replace(/^(PL|CC)-/i, '').replace(/-\d{3}$/, '');
+        const kat = String(r.kategori || '').toLowerCase();
+        return idPiutangAktifSet.has(idTrx) || (idInduk && idPiutangAktifSet.has(idInduk)) || (kat.includes('belum lunas') && !idTrx);
+      });
+
+      db.piutang = (db.piutang || []).filter(p => {
+        if (ekstrakTahunDariWaktu(p.waktu) !== tahunStr) return true;
+        const sisa = Number(p.sisaTagihan || 0);
+        return sisa > 0 && String(p.status || '').toLowerCase() !== 'lunas';
+      });
+
+      db.keperluan = (db.keperluan || []).filter(k =>
+        ekstrakTahunDariWaktu(k.waktu) !== tahunStr || String(k.status || '').toLowerCase().includes('menunggu')
+      );
+      db.pendingStok = (db.pendingStok || []).filter(s =>
+        ekstrakTahunDariWaktu(s.waktu) !== tahunStr || String(s.status || '').toLowerCase().includes('menunggu')
+      );
+      db.pendingTransaksi = (db.pendingTransaksi || []).filter(t =>
+        ekstrakTahunDariWaktu(t.waktu) !== tahunStr || String(t.status || '').toLowerCase().includes('menunggu')
+      );
+      db.riwayatDigital = (db.riwayatDigital || []).filter(d => ekstrakTahunDariWaktu(d.waktu) !== tahunStr);
+
+      db.laporan.unshift({
+        waktu: formatWaktuWIB(),
+        id: 'ARSIP-' + tahunStr,
+        kategori: 'Tutup Buku Tahunan',
+        user: currentUser.nama,
+        keterangan: `Tutup buku & pembersihan arsip tahun ${tahunStr}`,
+        nominal: 0,
+        detailInfo: 'Master produk, stok terakhir & DP belum lunas tetap dipertahankan'
+      });
+      saveSimDB(db);
+
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '🧹 Jalankan Tutup Buku';
+      }
+
+      tahunArsipSudahDiunduh = '';
+      tutupModal('modalKonfirmasiTutupBuku');
+      tampilkanToast(pesanHasil);
+      await muatSemuaDataAwal(false);
+      inisialisasiPanelArsipTahunan();
     }
 
     // =========================================================================
