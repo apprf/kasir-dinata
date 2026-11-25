@@ -3518,7 +3518,7 @@
         sisaTagihan: sisaTagihan,
         isDP: isDP,
         jatuhTempo: isDP ? formatTanggalIndo(jatuhTempoISO) : '-'
-      });
+      }, false);
 
       keranjang = [];
       document.getElementById('inputDiskon').value = '';
@@ -3948,7 +3948,7 @@
       );
     }
 
-    function tampilkanStruk(trx, autoPrint = true) {
+    function tampilkanStruk(trx, autoPrint = false) {
       strukTerakhirUntukCetak = trx;
       const fmt = getFormatCetakAktif();
       const html = bangunHTMLStruk(trx, fmt);
@@ -3960,7 +3960,7 @@
       }
       if (prevEl) prevEl.innerHTML = html;
       bukaModal('modalPreviewStruk');
-      if (autoPrint) {
+      if (autoPrint === true) {
         cetakKontenHTMLKePrinter(html, `Struk_${trx.id}`, fmt);
       }
     }
@@ -4014,7 +4014,7 @@
         sisaTagihan: sisaTagihan,
         isDP: isDP,
         jatuhTempo: jatuhTempo
-      }, true);
+      }, false);
     }
 
     function renderTabelRiwayatKasir() {
